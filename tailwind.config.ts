@@ -47,6 +47,11 @@ export default {
           DEFAULT: "hsl(var(--card))",
           foreground: "hsl(var(--card-foreground))",
         },
+        prospect: {
+          gold: "hsl(var(--prospect-gold))",
+          "gold-light": "hsl(var(--prospect-gold-light))",
+          "gold-dark": "hsl(var(--prospect-gold-dark))",
+        },
         sidebar: {
           DEFAULT: "hsl(var(--sidebar-background))",
           foreground: "hsl(var(--sidebar-foreground))",
