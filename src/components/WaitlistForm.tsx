@@ -63,11 +63,12 @@ const WaitlistForm = () => {
         setEmail("");
         setName("");
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       // Fallback for unexpected errors
+      const message = err instanceof Error ? err.message : String(err);
       toast({
         title: "Error",
-        description: err?.message || String(err),
+        description: message,
         variant: "destructive",
       });
     }
