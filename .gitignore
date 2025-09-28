@@ -22,3 +22,11 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+node_modules/
+.next/
+out/
+.env
+.DS_Store
+.vscode/
+.env.local
