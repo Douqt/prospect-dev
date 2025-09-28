@@ -19,4 +19,6 @@
     "noFallthroughCasesInSwitch": true
   },
   "include": ["vite.config.ts"]
+  ,
+  "_commitCleanup": "Removed internal lovable tags from earlier commits"
 }
