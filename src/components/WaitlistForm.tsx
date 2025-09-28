@@ -1,8 +1,10 @@
+"use client";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { Mail, User, Sparkles } from "lucide-react";
+import { supabase } from "@/lib/supabaseClient";
 
 const WaitlistForm = () => {
   const [email, setEmail] = useState("");
@@ -12,8 +14,11 @@ const WaitlistForm = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
-    if (!email || !name) {
+
+    const normalizedEmail = email.trim().toLowerCase();
+    const trimmedName = name.trim();
+
+    if (!normalizedEmail || !trimmedName) {
       toast({
         title: "Please fill in all fields",
         description: "Both name and email are required to join the waitlist.",
@@ -23,18 +28,53 @@ const WaitlistForm = () => {
     }
 
     setIsSubmitting(true);
-    
-    // Simulate API call
-    setTimeout(() => {
+
+    try {
+      const { error } = await supabase.from("waitlist").insert([
+        { name: trimmedName, email: normalizedEmail },
+      ]);
+
+      if (error) {
+        // Postgres unique violation error code is 23505; Supabase error.message also often contains the text
+        const msg = error.message || "An error occurred";
+        const isDuplicate =
+          (error.code && error.code.toString() === "23505") ||
+          /duplicate key value violates unique constraint/i.test(msg) ||
+          /unique constraint/i.test(msg) ||
+          /already exists/i.test(msg);
+
+        if (isDuplicate) {
+          toast({
+            title: "You're already on the list",
+            description: "Looks like that email has already signed up - we'll notify you on launch.",
+          });
+        } else {
+          toast({
+            title: "Error",
+            description: msg,
+            variant: "destructive",
+          });
+        }
+      } else {
+        toast({
+          title: "Welcome to Prospect! 🎉",
+          description: "You've been added to our exclusive waitlist. We'll notify you when we launch!",
+        });
+        setEmail("");
+        setName("");
+      }
+    } catch (err: any) {
+      // Fallback for unexpected errors
       toast({
-        title: "Welcome to Prospect! 🎉",
-        description: "You've been added to our exclusive waitlist. We'll notify you when we launch!",
+        title: "Error",
+        description: err?.message || String(err),
+        variant: "destructive",
       });
-      setEmail("");
-      setName("");
-      setIsSubmitting(false);
-    }, 1000);
+    }
+
+    setIsSubmitting(false);
   };
+
 
   return (
     <form onSubmit={handleSubmit} className="w-full max-w-md space-y-4">

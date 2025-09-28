@@ -54,11 +54,31 @@ npm run dev
 
 This project is built with:
 
-- Vite
+- Next.js (App Router)
 - TypeScript
 - React
 - shadcn-ui
 - Tailwind CSS
+
+## Migration notes (Vite -> Next.js)
+
+I migrated the project from a Vite entry to Next.js. Changes made:
+
+- Removed Vite entry files: `index.html`, `src/main.tsx`, and `src/App.tsx`.
+- Kept the existing `app/` directory which already contains a Next.js App Router layout and pages.
+- Updated `package.json` name and dev script to use Next.js.
+
+Next steps after pulling these changes locally:
+
+1. Run `npm install` to ensure Next.js and other dependencies are present.
+2. Verify `tsconfig.json` and `next.config.js` (create/adjust if needed).
+3. Start the dev server with `npm run dev` and open http://localhost:3000.
+4. Remove any Vite-specific dependencies if you want to slim the project.
+
+If you'd like, I can also:
+
+- Add a minimal `next.config.js` and adjust `tsconfig.json` for Next.js compatibility.
+- Run a local typecheck/lint and fix any issues.
 
 ## How can I deploy this project?
 
