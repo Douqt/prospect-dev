@@ -57,13 +57,13 @@ export default function Page() {
                     <FeatureCard
                         icon={<TrendingUp className="h-8 w-8" />}
                         title="Real-Time Trading"
-                        description="Access live market data, make predictions, and learn from every trade with our intuitive platform."
+                        description="Access live market data, make predictions, and learn from every trade."
                     />
 
                     <FeatureCard
                         icon={<Users className="h-8 w-8" />}
                         title="Community Discussions"
-                        description="Join a vibrant stock community where traders share insights, debate strategies, and learn from real conversations in real time."
+                        description="Talk stocks, share strategies, and learn directly from other traders in real time."
                     />
 
                     <FeatureCard
@@ -75,7 +75,7 @@ export default function Page() {
                     <FeatureCard
                         icon={<BookOpen className="h-8 w-8" />}
                         title="Guided Learning"
-                        description="Learn smarter with structured courses, interactive simulations, and one-on-one guidance from verified trading experts."
+                        description="Access courses, simulations, and direct guidance from verified trading experts."
                     />
 
                     <FeatureCard
@@ -87,7 +87,7 @@ export default function Page() {
                     <FeatureCard
                         icon={<Trophy className="h-8 w-8" />}
                         title="Monthly Contests"
-                        description="Compete with other traders, earn rewards, and climb the leaderboards for exclusive prizes."
+                        description="Compete with other traders, earn rewards, and climb the leaderboards for monthly prizes."
                     />
                 </div>
             </section>
