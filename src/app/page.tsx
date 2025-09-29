@@ -36,7 +36,7 @@ export default function Page() {
                         </div>
                         <div className="flex items-center gap-2">
                             <div className="w-2 h-2 bg-prospect-gold rounded-full"></div>
-                            <span>Expert mentorship</span>
+                            <span>Community Discussions</span>
                         </div>
                         <div className="flex items-center gap-2">
                             <div className="w-2 h-2 bg-prospect-gold rounded-full"></div>
@@ -62,8 +62,8 @@ export default function Page() {
 
                     <FeatureCard
                         icon={<Users className="h-8 w-8" />}
-                        title="Expert Mentorship"
-                        description="Connect with verified trading experts who provide personalized guidance and proven strategies."
+                        title="Community Discussions"
+                        description="Join a vibrant stock community where traders share insights, debate strategies, and learn from real conversations in real time."
                     />
 
                     <FeatureCard
@@ -74,8 +74,8 @@ export default function Page() {
 
                     <FeatureCard
                         icon={<BookOpen className="h-8 w-8" />}
-                        title="Interactive Courses"
-                        description="Learn through structured courses, video content, and hands-on trading simulations."
+                        title="Guided Learning"
+                        description="Learn smarter with structured courses, interactive simulations, and one-on-one guidance from verified trading experts."
                     />
 
                     <FeatureCard
