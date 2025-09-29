@@ -25,8 +25,5 @@
     "paths": {
       "@/*": ["./src/*"]
     }
-  },
-  "include": ["src"]
-  ,
-  "_commitCleanup": "Removed internal lovable tags from earlier commits"
+  }, "include": ["src"]
 }

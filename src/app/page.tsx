@@ -16,13 +16,13 @@ export default function Page() {
                     />
 
                     <h1 className="mb-6 text-5xl md:text-6xl font-bold bg-gradient-to-r from-prospect-gold via-prospect-gold-light to-prospect-gold bg-clip-text text-transparent relative z-10 leading-snug pb-2">
-                        Master Trading with
+                        The Stock Community 
                         <br />
-                        Expert Mentorship
+                        Built for Traders Like You
                     </h1>
 
                     <p className="mb-8 text-xl text-muted-foreground max-w-2xl mx-auto leading-relaxed">
-                        Join the next generation trading platform where expert mentors guide you through real-time market insights, social trading, and gamified learning experiences.
+                        Connect, learn, and grow with real conversations, expert mentors, and tools that turn market chatter into trading confidence.
                     </p>
 
                     <div className="mb-12">
