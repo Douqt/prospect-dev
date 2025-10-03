@@ -73,26 +73,27 @@ export default {
       },
       keyframes: {
         "accordion-down": {
-          from: {
-            height: "0",
-          },
-          to: {
-            height: "var(--radix-accordion-content-height)",
-          },
+          from: { height: "0" },
+          to: { height: "var(--radix-accordion-content-height)" },
         },
         "accordion-up": {
-          from: {
-            height: "var(--radix-accordion-content-height)",
-          },
-          to: {
-            height: "0",
-          },
+          from: { height: "var(--radix-accordion-content-height)" },
+          to: { height: "0" },
+        },
+        goldCycle: {
+          "0%": { color: "rgb(252, 211, 77)" },  // yellow
+          "25%": { color: "rgb(224, 168, 21)" }, // gold
+          "50%": { color: "rgb(251, 146, 60)" }, // orange
+          "75%": { color: "rgb(224, 168, 21)" }, // gold
+          "100%": { color: "rgb(252, 211, 77)" }, // yellow
         },
       },
       animation: {
         "accordion-down": "accordion-down 0.2s ease-out",
         "accordion-up": "accordion-up 0.2s ease-out",
+        "gold-cycle": "goldCycle 4s linear infinite",
       },
+      
     },
   },
   plugins: [animatePlugin],

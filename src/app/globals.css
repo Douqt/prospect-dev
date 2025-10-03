@@ -37,9 +37,10 @@ All colors MUST be HSL.
     --ring: 45 96% 53%;
 
     /* Prospect Brand Colors */
-    --prospect-gold: 45 96% 53%;
-    --prospect-gold-light: 45 96% 65%;
-    --prospect-gold-dark: 45 96% 41%;
+   --prospect-gold: 44 81% 48%;
+    --prospect-gold-light: 44 81% 60%;  /* lighter version */
+    --prospect-gold-dark: 44 81% 36%;   /* darker version */
+
     
     /* Gradients */
     --gradient-primary: linear-gradient(135deg, hsl(var(--prospect-gold)), hsl(var(--prospect-gold-light)));
