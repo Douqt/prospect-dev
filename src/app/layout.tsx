@@ -9,9 +9,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             <head>
                 <title>Prospect – The Social Trading Platform for Investors</title>
                 <meta name="description" content="Prospect is the free social trading app for investors. Connect with traders, share insights, and trade smarter in real time." />
-                <link rel="icon" href="/logo.png" />
-                <link rel="shortcut icon" type="image/png" href="/logo.png"/>
-                <link rel="apple-touch-icon" href="/logo.png"/>
+                <link rel="icon" href="/favicon.png" />
+                <link rel="shortcut icon" type="image/png" href="/favicon.png"/>
+                <link rel="apple-touch-icon" href="/favicon.png"/>
             </head>
             <body>
                 <Providers>{children}</Providers>
