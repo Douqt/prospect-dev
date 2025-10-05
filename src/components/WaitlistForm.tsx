@@ -30,23 +30,22 @@ const WaitlistForm = () => {
     setIsSubmitting(true);
 
     try {
+      // Insert into Supabase waitlist table
       const { error } = await supabase.from("waitlist").insert([
         { name: trimmedName, email: normalizedEmail },
       ]);
 
       if (error) {
-        // Postgres unique violation error code is 23505; Supabase error.message also often contains the text
         const msg = error.message || "An error occurred";
         const isDuplicate =
           (error.code && error.code.toString() === "23505") ||
-          /duplicate key value violates unique constraint/i.test(msg) ||
-          /unique constraint/i.test(msg) ||
-          /already exists/i.test(msg);
+          /duplicate key value/i.test(msg);
 
         if (isDuplicate) {
           toast({
             title: "You're already on the list",
-            description: "Looks like that email has already signed up - we'll notify you on launch.",
+            description:
+              "Looks like that email has already signed up - we'll notify you on launch.",
           });
         } else {
           toast({
@@ -55,16 +54,26 @@ const WaitlistForm = () => {
             variant: "destructive",
           });
         }
-      } else {
-        toast({
-          title: "Welcome to Prospect! 🎉",
-          description: "You've been added to our exclusive waitlist. We'll notify you when we launch!",
-        });
-        setEmail("");
-        setName("");
+        setIsSubmitting(false);
+        return;
       }
+
+      // Send confirmation email via API route
+      await fetch("/api/waitlist", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: trimmedName, email: normalizedEmail }),
+      });
+
+      toast({
+        title: "Welcome to Prospect! 🎉",
+        description:
+          "You've been added to our exclusive waitlist. We'll notify you when we launch!",
+      });
+
+      setEmail("");
+      setName("");
     } catch (err: unknown) {
-      // Fallback for unexpected errors
       const message = err instanceof Error ? err.message : String(err);
       toast({
         title: "Error",
@@ -75,7 +84,6 @@ const WaitlistForm = () => {
 
     setIsSubmitting(false);
   };
-
 
   return (
     <form onSubmit={handleSubmit} className="w-full max-w-md space-y-4">
@@ -89,7 +97,7 @@ const WaitlistForm = () => {
           className="pl-10 bg-card border-border focus:border-primary focus:ring-primary"
         />
       </div>
-      
+
       <div className="relative">
         <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
         <Input
@@ -100,9 +108,9 @@ const WaitlistForm = () => {
           className="pl-10 bg-card border-border focus:border-primary focus:ring-primary"
         />
       </div>
-      
-      <Button 
-        type="submit" 
+
+      <Button
+        type="submit"
         className="w-full bg-gradient-to-r from-prospect-gold to-prospect-gold-light hover:from-prospect-gold-dark hover:to-prospect-gold text-black font-semibold py-3 shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-[1.02]"
         disabled={isSubmitting}
       >
