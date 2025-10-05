@@ -1,9 +1,6 @@
 import WaitlistForm from "@/components/WaitlistForm";
 import FeatureCard from "@/components/FeatureCard";
 import prospectLogo from "@/assets/prospect-logo.png";
-import XLogo from "@/assets/X.png";
-import instaLogo from "@/assets/instagram.png";
-import tiktokLogo from "@/assets/tiktok.png";
 import { TrendingUp, Users, Trophy, Zap, DollarSign, BookOpen } from "lucide-react";
 
 export default function Page() {
