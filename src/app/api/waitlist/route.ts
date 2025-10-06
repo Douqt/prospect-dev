@@ -19,6 +19,7 @@ export async function POST(req: NextRequest) {
       html: `<p>Hey ${name},</p><p>Thanks for joining our waitlist! We'll notify you on launch.</p>`
     });
 
+    // Log Response for Debugging
     console.log("Resend response:", response);
 
 
