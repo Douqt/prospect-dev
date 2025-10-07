@@ -52,53 +52,49 @@ export default function Sidebar() {
                 <hr className="border-gray-700 my-2" />
               ) : (
                 <>
-                  <button
-                    onClick={() => {
+                  <a
+                    href={`#${link.id}`}
+                    onClick={(e) => {
+                      setActive(link.id);
                       if (link.id === "Learn") {
-                        setLearnOpen((prev) => !prev);
+                        e.preventDefault();
+                        setLearnOpen((p) => !p);
                       } else {
-                        setActive(link.id);
                         setLearnOpen(false);
                       }
                     }}
                     className={`w-full text-left flex items-center gap-3 px-4 py-3 rounded-lg font-medium transition-colors
                       ${
-                        link.id === "Stock Wars"
-                          ? "text-indigo-400 hover:text-indigo-500"
+                        link.id === 'Stock Wars'
+                          ? active === link.id
+                            ? 'bg-gray-900 border border-gray-700 text-indigo-500' // Active & Code Wars
+                            : 'text-indigo-400 hover:bg-gray-900' // Inactive & Code Wars
                           : active === link.id
-                          ? "text-yellow-500 bg-gray-900"
-                          : "text-gray-300 hover:bg-gray-900"
+                            ? 'bg-gray-900 border border-gray-700 text-yellow-500' // Active & Etc
+                            : 'text-gray-300 hover:bg-gray-900' // Inactive & Etc
                       }`}
                   >
                     {link.icon}
                     {link.label}
-                  </button>
+                  </a>
 
                   {/* Sub-tabs under Learn */}
-                  {link.id === "Learn" && learnOpen && (
+                  {link.id === 'Learn' && learnOpen && (
                     <div className="ml-6 mt-2 space-y-2">
-                      <a
-                        href="#mentors"
-                        onClick={() => setActive("Learn-Basics")}
-                        className={`block px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                          active === "Learn-Basics"
-                            ? "text-yellow-500 bg-gray-900"
-                            : "text-gray-400 hover:bg-gray-900"
-                        }`}
-                      >
-                        Mentors
-                      </a>
-                      <a
-                        href="#videos"
-                        onClick={() => setActive("Learn-Advanced")}
-                        className={`block px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                          active === "Learn-Advanced"
-                            ? "text-yellow-500 bg-gray-900"
-                            : "text-gray-400 hover:bg-gray-900"
-                        }`}
-                      >
-                        Videos
-                      </a>
+                      {['Mentors', 'Videos'].map((id) => (
+                        <a
+                          key={id}
+                          href={`#${id}`}
+                          onClick={() => setActive(id)}
+                          className={`block px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                            active === id
+                              ? 'bg-gray-900 border border-gray-700 text-yellow-500'
+                              : 'text-gray-400 hover:bg-gray-900'
+                          }`}
+                        >
+                          {id}
+                        </a>
+                      ))}
                     </div>
                   )}
                 </>
