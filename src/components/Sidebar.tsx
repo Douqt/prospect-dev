@@ -28,7 +28,7 @@ export default function Sidebar() {
       .toLowerCase()
       .replace(/\s+\(beta\)/g, "-beta")
       .replace(/\s+/g, "-")
-      .replace(/[^a-z0-9\-]/g, "");
+      .replace(/[^a-z0-9-]/g, "");
 
   const links: (
     | { id: string; label: string; icon: React.ReactNode }
