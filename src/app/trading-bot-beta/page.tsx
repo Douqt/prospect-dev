@@ -1,7 +1,7 @@
 import Sidebar from "@/components/Sidebar";
 import Navbar from "@/components/Navbar";
 
-export default function FeaturesPage() {
+export default function TradingBotBetaPage() {
   return (
     <div className="min-h-screen bg-black relative overflow-hidden text-white">
       <Sidebar />
@@ -15,9 +15,11 @@ export default function FeaturesPage() {
       <Navbar />
       <main className="relative z-10 pt-24 pl-64 pr-6">
         <div className="h-[calc(100vh-6rem)] flex items-center justify-center">
-          <h1 className="text-4xl font-bold">Features</h1>
+          <h1 className="text-4xl font-bold">Trading Bot (BETA)</h1>
         </div>
       </main>
     </div>
   );
 }
+
+
