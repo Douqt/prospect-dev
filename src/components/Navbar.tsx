@@ -13,7 +13,7 @@ export default function NavBar() {
     avatar_url?: string | null;
     last_login?: string | null;
   } | null>(null);
-  const [username, setUsername] = useState<string | null>(null);
+  const [displayName, setDisplayName] = useState<string | null>(null);
   const [localLastLogin, setLocalLastLogin] = useState<string | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
 
@@ -68,26 +68,26 @@ export default function NavBar() {
   //   load();
   // }, [user]);
 
-  // Fetch username when user changes
+  // Fetch displayName when user changes
   useEffect(() => {
     if (!user?.id) return;
 
-    const fetchUsername = async () => {
+    const fetchDisplayName = async () => {
       try {
         const { data } = await supabase
           .from('profiles')
-          .select('username')
+          .select('display_name')
           .eq('id', user.id)
           .single();
 
-        setUsername(data?.username || null);
+        setDisplayName(data?.display_name || null);
       } catch (error) {
-        console.debug('Could not fetch username:', error);
-        setUsername(null);
+        console.debug('Could not fetch displayName:', error);
+        setDisplayName(null);
       }
     };
 
-    fetchUsername();
+    fetchDisplayName();
   }, [user?.id]);
 
   useEffect(() => {
@@ -249,7 +249,7 @@ export default function NavBar() {
                       )}
                       <div>
                         <div className="text-sm font-medium text-foreground">
-                          {username || user?.email?.split("@")[0] || "User"}
+                          {displayName || "User"}
                         </div>
                         <div className="text-xs text-muted-foreground">
                           {user?.email}
