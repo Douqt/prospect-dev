@@ -1,14 +1,14 @@
+"use client";
 import Sidebar from "@/components/Sidebar";
 import Navbar from "@/components/Navbar";
-import { TrendingUp, Users, Trophy, Zap, DollarSign, BookOpen } from "lucide-react";
 
 export default function Page() {
     return (
-        <div className="min-h-screen bg-black relative overflow-hidden">
+        <div className="min-h-screen relative overflow-hidden bg-background">
             {/* Sidebar */}
             <Sidebar />
             {/* Grid lines - behind everything */}
-            <div 
+            <div
                 className="absolute inset-0 z-0 pointer-events-none grid-background"
                 style={{
                 backgroundImage: `

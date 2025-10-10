@@ -111,7 +111,7 @@ const WaitlistForm = () => {
 
       <Button
         type="submit"
-        className="w-full bg-gradient-to-r from-prospect-gold to-prospect-gold-light hover:from-prospect-gold-dark hover:to-prospect-gold text-black font-semibold py-3 shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-[1.02]"
+        className="w-full bg-gradient-to-r from-sky-400 to-sky-300 hover:from-sky-500 hover:to-sky-400 text-white font-semibold py-3 shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-[1.02]"
         disabled={isSubmitting}
       >
         {isSubmitting ? (

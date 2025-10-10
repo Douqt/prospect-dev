@@ -1,5 +1,5 @@
 "use client";
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { useRouter } from "next/navigation";
 
@@ -11,7 +11,26 @@ export default function SignupPage() {
   const [isExisting, setIsExisting] = useState(false);
   const [resetLoading, setResetLoading] = useState(false);
   const [resetMsg, setResetMsg] = useState<string | null>(null);
+  const [darkMode, setDarkMode] = useState(false);
   const router = useRouter();
+
+  // Dark mode detection
+  useEffect(() => {
+    const isDark = document.documentElement.classList.contains("dark");
+    setDarkMode(isDark);
+    
+    const observer = new MutationObserver(() => {
+      const isDark = document.documentElement.classList.contains("dark");
+      setDarkMode(isDark);
+    });
+    
+    observer.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ["class"]
+    });
+    
+    return () => observer.disconnect();
+  }, []);
 
   const handleSignup = async () => {
     setLoading(true);
@@ -97,12 +116,12 @@ export default function SignupPage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-black text-white">
-      <div className="w-full max-w-md p-8 bg-gray-900 border border-gray-800 rounded-lg shadow-lg">
-        <h2 className="text-2xl font-bold text-[#e0a815] mb-2">
+    <div className="min-h-screen flex items-center justify-center bg-background text-foreground">
+      <div className="w-full max-w-md p-8 rounded-lg shadow-lg bg-popover border border-border">
+        <h2 className="text-2xl font-bold mb-2 text-primary">
           Create your account
         </h2>
-        <p className="text-sm text-gray-400 mb-6">
+        <p className="text-sm mb-6 text-muted-foreground">
           Start your Prospect journey
         </p>
 
@@ -113,7 +132,7 @@ export default function SignupPage() {
               setEmail(e.target.value)
             }
             placeholder="Email"
-            className="w-full p-3 bg-gray-800 rounded border border-gray-700 focus:outline-none focus:ring-2 focus:ring-[#e0a815]"
+            className="w-full p-3 rounded bg-input border border-border focus:outline-none focus:ring-2 focus:ring-ring"
           />
           <input
             value={password}
@@ -122,15 +141,15 @@ export default function SignupPage() {
             }
             placeholder="Password"
             type="password"
-            className="w-full p-3 bg-gray-800 rounded border border-gray-700 focus:outline-none focus:ring-2 focus:ring-[#e0a815]"
+            className="w-full p-3 rounded bg-input border border-border focus:outline-none focus:ring-2 focus:ring-ring"
           />
           {error && <div className="text-sm text-red-500">{error}</div>}
           {isExisting && (
-            <div className="text-sm text-gray-300">
+            <div className="text-sm text-muted-foreground">
               <div className="mt-2 flex items-center justify-between gap-2">
                 <a
                   href={`/login?email=${encodeURIComponent(email)}`}
-                  className="text-[#e0a815]"
+                  className="text-primary hover:underline"
                 >
                   Sign in
                 </a>
@@ -155,28 +174,28 @@ export default function SignupPage() {
                     }
                   }}
                   disabled={resetLoading || !email}
-                  className="text-sm text-[#e0a815] underline"
+                  className="text-sm text-primary hover:underline disabled:opacity-50"
                 >
                   {resetLoading ? "Sending..." : "Reset password"}
                 </button>
               </div>
               {resetMsg && (
-                <div className="mt-2 text-sm text-green-400">{resetMsg}</div>
+                <div className="mt-2 text-sm text-green-500">{resetMsg}</div>
               )}
             </div>
           )}
           <button
             onClick={handleSignup}
             disabled={loading}
-            className="w-full p-3 bg-[#e0a815] text-black rounded font-semibold hover:brightness-95"
+            className="w-full p-3 rounded font-semibold bg-primary text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-50"
           >
             {loading ? "Creating..." : "Create account"}
           </button>
         </div>
 
-        <div className="mt-6 text-center text-sm text-gray-400">
+        <div className="mt-6 text-center text-sm text-muted-foreground">
           Already have an account?{" "}
-          <a href="/login" className="text-[#e0a815] font-medium">
+          <a href="/login" className="font-medium text-primary hover:underline">
             Sign in
           </a>
         </div>

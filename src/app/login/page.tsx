@@ -8,6 +8,7 @@ function LoginForm() {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [darkMode, setDarkMode] = useState(false);
   const router = useRouter();
   const searchParams = useSearchParams();
 
@@ -18,6 +19,24 @@ function LoginForm() {
       setEmail(emailParam);
     }
   }, [searchParams]);
+
+  // Dark mode detection
+  useEffect(() => {
+    const isDark = document.documentElement.classList.contains("dark");
+    setDarkMode(isDark);
+    
+    const observer = new MutationObserver(() => {
+      const isDark = document.documentElement.classList.contains("dark");
+      setDarkMode(isDark);
+    });
+    
+    observer.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ["class"]
+    });
+    
+    return () => observer.disconnect();
+  }, []);
 
   const handleLogin = async () => {
     setLoading(true);
@@ -73,10 +92,10 @@ function LoginForm() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-black text-white">
-      <div className="w-full max-w-md p-8 bg-gray-900 border border-gray-800 rounded-lg shadow-lg">
-        <h2 className="text-2xl font-bold text-[#e0a815] mb-2">Welcome back</h2>
-        <p className="text-sm text-gray-400 mb-6">
+    <div className="min-h-screen flex items-center justify-center bg-background text-foreground">
+      <div className="w-full max-w-md p-8 rounded-lg shadow-lg bg-popover border border-border">
+        <h2 className="text-2xl font-bold mb-2 text-primary">Welcome back</h2>
+        <p className="text-sm mb-6 text-muted-foreground">
           Sign in to your Prospect account
         </p>
 
@@ -85,28 +104,28 @@ function LoginForm() {
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             placeholder="Email"
-            className="w-full p-3 bg-gray-800 rounded border border-gray-700 focus:outline-none focus:ring-2 focus:ring-[#e0a815]"
+            className="w-full p-3 rounded bg-input border border-border focus:outline-none focus:ring-2 focus:ring-ring"
           />
           <input
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             placeholder="Password"
             type="password"
-            className="w-full p-3 bg-gray-800 rounded border border-gray-700 focus:outline-none focus:ring-2 focus:ring-[#e0a815]"
+            className="w-full p-3 rounded bg-input border border-border focus:outline-none focus:ring-2 focus:ring-ring"
           />
           {error && <div className="text-sm text-red-500">{error}</div>}
           <button
             onClick={handleLogin}
             disabled={loading}
-            className="w-full p-3 bg-[#e0a815] text-black rounded font-semibold hover:brightness-95"
+            className="w-full p-3 rounded font-semibold bg-primary text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-50"
           >
             {loading ? "Signing in..." : "Sign in"}
           </button>
         </div>
 
-        <div className="mt-6 text-center text-sm text-gray-400">
+        <div className="mt-6 text-center text-sm text-muted-foreground">
           Don't have an account?{" "}
-          <a href="/signup" className="text-[#e0a815] font-medium">
+          <a href="/signup" className="font-medium text-primary hover:underline">
             Create one
           </a>
         </div>

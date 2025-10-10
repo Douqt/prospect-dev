@@ -2,11 +2,32 @@ import "./globals.css";
 import Providers from "./providers";
 import { Analytics } from "@vercel/analytics/next"
 import { SpeedInsights } from "@vercel/speed-insights/next"
+import { getServerTheme } from "@/lib/theme-server";
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
+    // Get theme from server to prevent flash
+    const serverTheme = await getServerTheme();
+
     return (
-        <html lang="en">
+        <html lang="en" suppressHydrationWarning>
             <head>
+                <script dangerouslySetInnerHTML={{
+                    __html: `
+                        (function(){
+                            try {
+                                // Apply theme immediately to prevent FOUC
+                                const serverTheme = ${JSON.stringify(serverTheme)};
+                                let theme = serverTheme || localStorage.getItem('theme');
+                                const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+                                const mode = (theme === 'dark' || (!theme && prefersDark)) ? 'dark' : 'light';
+                                document.documentElement.classList.toggle('dark', mode === 'dark');
+                                if (!theme) localStorage.setItem('theme', mode);
+                            } catch (e) {
+                                console.debug('Preload script error:', e);
+                            }
+                        })();
+                    `
+                }} />
                 <title>Prospect – The Social Trading Platform for Investors</title>
                 <meta name="description" content="Prospect is the free social trading app for investors. Connect with traders, share insights, and trade smarter in real time." />
                 <link rel="icon" type="image/png" href="/favicon-96x96.png" sizes="96x96" />
@@ -16,7 +37,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                 <link rel="manifest" href="/site.webmanifest" />
             </head>
             <body>
-                <Providers>{children}</Providers>
+                <Providers initialTheme={serverTheme}>{children}</Providers>
                 <Analytics />
                 <SpeedInsights />
             </body>
