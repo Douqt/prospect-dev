@@ -19,7 +19,27 @@ import { GiCrossedSwords, GiGoldBar } from "react-icons/gi";
 export default function Sidebar() {
   const [active, setActive] = useState("Dashboard");
   const [learnOpen, setLearnOpen] = useState(false);
+  const [darkMode, setDarkMode] = useState(false);
   const pathname = usePathname();
+
+  useEffect(() => {
+    // Initialize dark mode state from document class (set by layout script)
+    const isDark = document.documentElement.classList.contains("dark");
+    setDarkMode(isDark);
+
+    // Watch for changes in dark mode
+    const observer = new MutationObserver(() => {
+      const isDark = document.documentElement.classList.contains("dark");
+      setDarkMode(isDark);
+    });
+
+    observer.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ["class"]
+    });
+
+    return () => observer.disconnect();
+  }, []);
 
   const ICON_SIZE = "h-4 w-4";
 
@@ -80,13 +100,13 @@ export default function Sidebar() {
   }, [currentSlug]);
 
   return (
-    <aside className="w-64 bg-black border-r border-gray-800 fixed left-0 top-16 h-screen overflow-y-auto z-50 no-scrollbar">
+    <aside className="w-64 fixed left-0 top-16 h-screen overflow-y-auto z-50 no-scrollbar bg-background border-r border-border">
       <div className="p-3">
         <nav className="space-y-0">
           {links.map((link) => (
             <div key={link.id}>
               {'id' in link && link.id.startsWith('breaker') ? (
-                <hr className="border-gray-700 my-2" />
+                <hr className="my-2 border-border" />
               ) : (
                 <>
                   {/* narrow the union so TS knows label/icon exist */}
@@ -111,11 +131,11 @@ export default function Sidebar() {
                       className={`w-full text-left flex items-center gap-3 px-4 py-3 rounded-lg font-medium transition-colors ${
                         link.id === "Stock Wars"
                           ? derivedActive === link.id
-                            ? "bg-gray-900 border border-gray-700 text-indigo-500"
-                            : "text-indigo-400 hover:bg-gray-900"
+                            ? "bg-muted border border-border text-red-600"
+                            : "text-red-600 hover:bg-muted"
                           : derivedActive === link.id
-                            ? "bg-gray-900 border border-gray-700 text-yellow-500"
-                            : "text-gray-300 hover:bg-gray-900"
+                            ? "bg-muted border border-border text-primary"
+                            : "text-foreground hover:bg-muted"
                       }`}
                     >
                       {link.icon}
@@ -132,8 +152,8 @@ export default function Sidebar() {
                           onClick={() => setActive(id)}
                           className={`block px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
                             derivedLearnChildActive === id
-                              ? "bg-gray-900 border border-gray-700 text-yellow-500"
-                              : "text-gray-400 hover:bg-gray-900"
+                              ? "bg-muted border border-border text-primary"
+                              : "text-muted-foreground hover:bg-muted"
                           }`}
                         >
                           {id}

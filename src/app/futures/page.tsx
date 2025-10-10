@@ -3,7 +3,7 @@ import Navbar from "@/components/Navbar";
 
 export default function FuturesPage() {
   return (
-    <div className="min-h-screen bg-black relative overflow-hidden text-white">
+    <div className="min-h-screen bg-background relative overflow-hidden text-foreground">
       <Sidebar />
       <div
         className="absolute inset-0 z-0 pointer-events-none grid-background"
@@ -21,5 +21,3 @@ export default function FuturesPage() {
     </div>
   );
 }
-
-

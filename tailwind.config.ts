@@ -54,6 +54,9 @@ export default {
           gold: "hsl(var(--prospect-gold))",
           "gold-light": "hsl(var(--prospect-gold-light))",
           "gold-dark": "hsl(var(--prospect-gold-dark))",
+          "baby-blue": "hsl(var(--prospect-baby-blue))",
+          "baby-blue-light": "hsl(var(--prospect-baby-blue-light))",
+          "baby-blue-dark": "hsl(var(--prospect-baby-blue-dark))",
         },
         sidebar: {
           DEFAULT: "hsl(var(--sidebar-background))",
@@ -80,21 +83,27 @@ export default {
           from: { height: "var(--radix-accordion-content-height)" },
           to: { height: "0" },
         },
-        goldCycle: {
-          "0%": { color: "rgb(252, 211, 77)" },  // yellow
-          "25%": { color: "rgb(224, 168, 21)" }, // gold
-          "50%": { color: "rgb(251, 146, 60)" }, // orange
-          "75%": { color: "rgb(224, 168, 21)" }, // gold
-          "100%": { color: "rgb(252, 211, 77)" }, // yellow
+        babyBlueCycle: {
+          "0%": { color: "rgb(56, 189, 248)" },  // sky-400
+          "25%": { color: "rgb(125, 211, 252)" }, // sky-300
+          "50%": { color: "rgb(14, 165, 233)" }, // sky-500
+          "75%": { color: "rgb(125, 211, 252)" }, // sky-300
+          "100%": { color: "rgb(56, 189, 248)" }, // sky-400
         },
       },
       animation: {
         "accordion-down": "accordion-down 0.2s ease-out",
         "accordion-up": "accordion-up 0.2s ease-out",
-        "gold-cycle": "goldCycle 4s linear infinite",
+        "baby-blue-cycle": "babyBlueCycle 4s linear infinite",
       },
       
     },
   },
   plugins: [animatePlugin],
 } satisfies Config;
+
+// Dark mode configuration
+// Add to your middleware or layout to set js.cookie with user's theme preference
+// This snippet enables zero-flash dark mode
+// Usage: Store "light" or "dark" in document.cookie "theme"
+// or use localStorage "theme" as fallback in head script
