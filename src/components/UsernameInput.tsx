@@ -32,9 +32,10 @@ export function UsernameInput({ currentUsername, onChange, disabled = false, all
           .eq('username', username.toLowerCase());
 
         setAvailable(data.length === 0);
-      } catch (error: any) {
-        // If error message indicates no rows found, username is available
-        if (error.code === 'PGRST116' || error.details?.includes('No rows found')) {
+      } catch (error) {
+        // Type-safe error handling for Supabase errors
+        const supabaseError = error as { code?: string; details?: string };
+        if (supabaseError.code === 'PGRST116' || supabaseError.details?.includes('No rows found')) {
           setAvailable(true);
         } else {
           console.error('Error checking username availability:', error);
