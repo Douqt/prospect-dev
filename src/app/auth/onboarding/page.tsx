@@ -60,6 +60,10 @@ export default function OnboardingPage() {
 
   const handleNext = () => {
     if (currentStep < steps.length) {
+      // When moving from step 1 to step 2, set display name to username by default
+      if (currentStep === 1 && username && !displayName.trim()) {
+        setDisplayName(username);
+      }
       setCurrentStep(currentStep + 1);
     }
   };
@@ -82,7 +86,7 @@ export default function OnboardingPage() {
         .upsert({
           id: user.id,
           username: username.toLowerCase(),
-          display_name: displayName,
+          display_name: displayName || username, // Fallback to username if displayName is empty
           bio,
           avatar_url: avatarUrl || null,
           dark_mode: darkMode,
