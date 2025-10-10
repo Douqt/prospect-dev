@@ -24,7 +24,7 @@ function useDebounce<T>(value: T, delay: number): T {
 }
 
 // Helper to get initial theme on client-side
-function getClientInitialTheme(): Theme {
+async function getClientInitialTheme(): Promise<Theme> {
   if (typeof window === 'undefined') return 'light';
 
   // Check localStorage first
@@ -33,7 +33,20 @@ function getClientInitialTheme(): Theme {
     return stored;
   }
 
-  // Fallback to system preference
+  // Check if user is logged in
+  try {
+    const { data: { user } } = await supabase.auth.getUser();
+    // If user is NOT logged in, default to dark mode
+    if (!user) {
+      return 'dark';
+    }
+  } catch (error) {
+    // If there's an error checking auth, default to dark
+    console.debug('Auth check error during theme init:', error);
+    return 'dark';
+  }
+
+  // Fallback to system preference for logged in users
   return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
 }
 
@@ -45,9 +58,20 @@ export function ThemeProvider({
   initialTheme?: Theme;
 }) {
   const [theme, setTheme] = useState<Theme>(() =>
-    initialTheme || getClientInitialTheme()
+    initialTheme || 'dark' // Default to dark while loading
   );
   const [isLoading, setIsLoading] = useState(false);
+
+  // Initialize theme asynchronously on mount
+  useEffect(() => {
+    if (initialTheme) return; // Already have initial theme from SSR
+
+    getClientInitialTheme().then((resolvedTheme) => {
+      setTheme(resolvedTheme);
+    }).catch(() => {
+      setTheme('dark'); // Fallback to dark on error
+    });
+  }, [initialTheme]);
 
   // Update DOM immediately when theme changes
   useEffect(() => {
