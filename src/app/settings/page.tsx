@@ -213,7 +213,6 @@ export default function SettingsPage() {
                   type="text"
                   value={displayName}
                   onChange={(e) => setDisplayName(e.target.value)}
-                  onBlur={handleSave}
                   placeholder="Your display name"
                   className="w-full p-3 border border-border rounded-md focus:outline-none focus:ring-2 focus:ring-ring bg-background"
                 />
@@ -228,7 +227,6 @@ export default function SettingsPage() {
                   id="bio"
                   value={bio}
                   onChange={(e) => setBio(e.target.value)}
-                  onBlur={handleSave}
                   placeholder="Tell us about yourself..."
                   rows={4}
                   maxLength={160}
