@@ -44,16 +44,6 @@ export default function SignupPage() {
       console.log("Signup response - data:", data);
       console.log("Signup response - error:", error);
       
-      // Check if user already exists (no error but no session means existing user)
-      if (!error && data?.user && !data?.session) {
-        setError(
-          "An account with this email already exists. Please sign in or reset your password.",
-        );
-        setIsExisting(true);
-        setLoading(false);
-        return; // Exit early - don't proceed with signup flow
-      }
-      
       if (error) {
         const msg = (error?.message ?? "").toString();
         console.log("Signup error:", error);
