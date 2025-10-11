@@ -26,6 +26,7 @@ export default function OnboardingPage() {
   const [darkMode, setDarkMode] = useState(false);
   const [isFromEmailConfirmation, setIsFromEmailConfirmation] = useState(false);
   const [isCrossDevice, setIsCrossDevice] = useState(false);
+  const [emailFromUrl, setEmailFromUrl] = useState<string | null>(null);
   const [usernameAvailable, setUsernameAvailable] = useState<boolean | null>(null);
   const [checkingUsername, setCheckingUsername] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -33,16 +34,27 @@ export default function OnboardingPage() {
 
   const router = useRouter();
 
-  // Extract callback URL and cross-device flags from search params on mount
+  // Extract callback URL, cross-device flags, and email from search params on mount
   useEffect(() => {
     const searchParams = new URLSearchParams(window.location.search);
     const callback = searchParams.get('callbackUrl');
     const fromEmail = searchParams.get('from') === 'email_confirmation';
     const crossDevice = searchParams.get('cross_device') === 'true';
+    const encodedEmail = searchParams.get('email');
 
     setCallbackUrl(callback);
     setIsFromEmailConfirmation(fromEmail);
     setIsCrossDevice(crossDevice);
+
+    // Decode the email if it exists in the URL
+    if (encodedEmail) {
+      try {
+        setEmailFromUrl(decodeURIComponent(encodedEmail));
+      } catch (error) {
+        console.error('Failed to decode email parameter:', error);
+        setEmailFromUrl(null);
+      }
+    }
 
     // If from email confirmation, show a toast to indicate this
     if (fromEmail) {
@@ -104,17 +116,20 @@ export default function OnboardingPage() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("User not authenticated");
 
-      // Update profile with onboarding data
+      // Update profile with onboarding data - ensure all fields are present
       const { error } = await supabase
         .from("profiles")
         .upsert({
           id: user.id,
+          email: emailFromUrl || user.email, // Use decoded email from URL else user email
           username: username.toLowerCase(),
           display_name: displayName || username, // Fallback to username if displayName is empty
-          bio,
+          bio: bio || null,
           avatar_url: avatarUrl || null,
           dark_mode: darkMode,
           onboarded: true,
+          last_login: new Date().toISOString(), // Update login time
+          updated_at: new Date().toISOString(), // Update timestamp
         });
 
       if (error) throw error;
