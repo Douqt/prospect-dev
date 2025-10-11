@@ -77,12 +77,13 @@ export async function middleware(request: NextRequest) {
     if (profileWithTheme?.dark_mode !== undefined) {
       const themeValue = profileWithTheme.dark_mode ? 'dark' : 'light'
       response.cookies.set('theme', themeValue, {
-        path: '/',
-        httpOnly: false, // Allow client-side reading
-        secure: process.env.NODE_ENV === 'production',
-        sameSite: 'lax',
-        maxAge: 60 * 60 * 24 * 30, // 30 days
-      })
+        path     : '/',
+        httpOnly : false,
+        sameSite : 'lax',
+        secure   : true,            // <-- must be true on Vercel (https)
+        maxAge   : 60 * 60 * 24 * 30,
+        domain   : '.vercel.app',   // <-- add this line while on *.vercel.app
+      });
     }
   }
 
