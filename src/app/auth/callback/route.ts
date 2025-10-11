@@ -46,7 +46,11 @@ export async function GET(request: NextRequest) {
 
       if (!profile || !profile.onboarded) {
         // Redirect to onboarding if user hasn't completed it
-        return NextResponse.redirect(`${origin}/auth/onboarding`)
+        // Include a cross-device parameter to track multi-device flow
+        const redirectionUrl = new URL(`${origin}/auth/onboarding`);
+        redirectionUrl.searchParams.set('from_email', 'true');
+        redirectionUrl.searchParams.set('user_id', data.user.id);
+        return NextResponse.redirect(redirectionUrl.toString())
       }
 
       // Redirect to where they originally wanted to go or home
