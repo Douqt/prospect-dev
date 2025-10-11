@@ -65,7 +65,7 @@ export default function SignupPage() {
         email: email.trim(),
         password,
         options: {
-          emailRedirectTo: `${location.origin}/auth/confirmed`,
+          emailRedirectTo: `http://prospect-dev.vercel.app/auth/confirmed`,
         },
       });
 
