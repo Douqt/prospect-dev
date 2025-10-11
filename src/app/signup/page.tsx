@@ -66,7 +66,7 @@ export default function SignupPage() {
         email: email.trim(),
         password,
         options: {
-          emailRedirectTo: `${getBaseUrl()}/auth/confirmed`,
+          emailRedirectTo: `${getBaseUrl().trim()}/auth/confirmed`,
         },
       });
 
