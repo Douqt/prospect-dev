@@ -32,74 +32,89 @@ export default function SignupPage() {
     return () => observer.disconnect();
   }, []);
 
+  const isValidEmail = (email: string): boolean => {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    return emailRegex.test(email);
+  };
+
   const handleSignup = async () => {
+    // Basic input validation
+    if (!email.trim()) {
+      setError("Email is required");
+      return;
+    }
+    if (!isValidEmail(email.trim())) {
+      setError("Please enter a valid email address");
+      return;
+    }
+    if (!password.trim()) {
+      setError("Password is required");
+      return;
+    }
+    if (password.length < 6) {
+      setError("Password must be at least 6 characters");
+      return;
+    }
+
     setLoading(true);
     setError(null);
+    setIsExisting(false);
+
     try {
       const { data, error } = await supabase.auth.signUp({
-        email,
+        email: email.trim(),
         password,
+        options: {
+          emailRedirectTo: `${location.origin}/auth/confirmed`,
+        },
       });
-      
+
       console.log("Signup response - data:", data);
       console.log("Signup response - error:", error);
-      
+
       if (error) {
-        const msg = (error?.message ?? "").toString();
-        console.log("Signup error:", error);
-        console.log("Error message:", msg);
-        
+        const msg = error.message;
+
+        // Check for various "already exists" error patterns
         if (
-          /already registered|already exists|user already registered|duplicate|email.*already/i.test(
-            msg,
-          )
+          msg.includes("already registered") ||
+          msg.includes("already exists") ||
+          msg.includes("user already registered") ||
+          msg.includes("duplicate") ||
+          msg.includes("email already")
         ) {
-          setError(
-            "An account with this email already exists. Please sign in or reset your password.",
-          );
+          setError("An account with this email already exists. Please sign in or reset your password.");
           setIsExisting(true);
-          setLoading(false);
-          return; // Exit early - don't proceed with signup flow
+          return; // Exit early - don't throw, just show error
         }
-        throw error;
+
+        // Handle other types of errors
+        throw new Error(msg);
       }
 
-      // Only proceed with signup flow if no error occurred
-      // If sign up created a session, upsert the profile last_login
+      // Success case: user is created, awaiting email confirmation
       if (data?.user) {
+        // Note: session is null when email confirmation is enabled (normal behavior)
         try {
           const { upsertProfileLastLogin } = await import("../../lib/profile");
           await upsertProfileLastLogin(
             data.user.id,
             data.user.email ?? undefined,
           );
-        } catch (clientErr) {
-          try {
-            const token = data.session?.access_token ?? null;
-            if (token) {
-              await fetch("/api/profile", {
-                method: "POST",
-                headers: {
-                  "Content-Type": "application/json",
-                  Authorization: `Bearer ${token}`,
-                },
-                body: JSON.stringify({
-                  last_login: new Date().toISOString(),
-                  email: data.user.email ?? null,
-                }),
-              });
-            }
-          } catch (e) {
-            console.error("profile fallback error", e);
-          }
+        } catch (profileErr) {
+          console.error("Profile creation warning (non-critical):", profileErr);
+          // Don't throw here - profile creation failure shouldn't block signup
         }
-        
-        // Only navigate to check-email if signup was successful (no error)
+
+        // Navigate to email confirmation page
         router.push("/auth/check-email");
+      } else {
+        // Unexpected case
+        throw new Error("Signup completed but no user data returned");
       }
-    } catch (err: unknown) {
-      const e = err as { message?: string };
-      setError(e?.message || String(err) || "Failed to send verification");
+    } catch (err) {
+      const error = err as { message?: string };
+      setError(error?.message || "Failed to create account");
     } finally {
       setLoading(false);
     }
@@ -115,23 +130,28 @@ export default function SignupPage() {
           Start your Prospect journey
         </p>
 
-        <div className="space-y-4">
+        <form onSubmit={(e) => { e.preventDefault(); handleSignup(); }} className="space-y-4">
           <input
             value={email}
-            onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-              setEmail(e.target.value)
-            }
+            onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+              setEmail(e.target.value);
+              if (error) setError(null); // Clear error when user starts typing
+            }}
             placeholder="Email"
+            type="email"
             className="w-full p-3 rounded bg-input border border-border focus:outline-none focus:ring-2 focus:ring-ring"
+            autoComplete="email"
           />
           <input
             value={password}
-            onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-              setPassword(e.target.value)
-            }
+            onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+              setPassword(e.target.value);
+              if (error) setError(null); // Clear error when user starts typing
+            }}
             placeholder="Password"
             type="password"
             className="w-full p-3 rounded bg-input border border-border focus:outline-none focus:ring-2 focus:ring-ring"
+            autoComplete="new-password"
           />
           {error && <div className="text-sm text-red-500">{error}</div>}
           {isExisting && (
@@ -175,13 +195,13 @@ export default function SignupPage() {
             </div>
           )}
           <button
-            onClick={handleSignup}
+            type="submit"
             disabled={loading}
             className="w-full p-3 rounded font-semibold bg-primary text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-50"
           >
             {loading ? "Creating..." : "Create account"}
           </button>
-        </div>
+        </form>
 
         <div className="mt-6 text-center text-sm text-muted-foreground">
           Already have an account?{" "}

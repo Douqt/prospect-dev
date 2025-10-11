@@ -27,8 +27,16 @@ export default function OnboardingPage() {
   const [usernameAvailable, setUsernameAvailable] = useState<boolean | null>(null);
   const [checkingUsername, setCheckingUsername] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [callbackUrl, setCallbackUrl] = useState<string | null>(null);
 
   const router = useRouter();
+
+  // Extract callback URL from search params on mount
+  useEffect(() => {
+    const searchParams = new URLSearchParams(window.location.search);
+    const callback = searchParams.get('callbackUrl');
+    setCallbackUrl(callback);
+  }, []);
 
   // Check username availability with debouncing
   useEffect(() => {
@@ -99,7 +107,10 @@ export default function OnboardingPage() {
       localStorage.setItem("theme", darkMode ? "dark" : "light");
 
       toast.success("Welcome to Prospect!");
-      router.push("/feed");
+
+      // Redirect to callback URL if provided, otherwise go to home
+      const redirectUrl = callbackUrl || '/';
+      router.push(redirectUrl);
     } catch (error) {
       console.error("Onboarding error:", error);
       toast.error("Failed to complete onboarding. Please try again.");
