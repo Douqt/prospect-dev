@@ -117,18 +117,38 @@ export default function OnboardingPage() {
         url: window.location.href
       });
 
+      // Get user ID from URL params for cross-device flows
+      const urlParams = new URLSearchParams(window.location.search);
+      const crossDeviceUserId = urlParams.get('user_id');
+      let currentUserId = crossDeviceUserId;
+
+      // Try to get current session
       const { data: { user }, error: getUserError } = await supabase.auth.getUser();
-      if (getUserError || !user) {
-        console.error("Auth error:", getUserError);
+
+      if (!user && !crossDeviceUserId) {
+        console.error("Auth error: No current session and no user_id from URL");
         throw new Error(`User not authenticated: ${getUserError?.message || 'No user found'}`);
       }
 
-      console.log("User authenticated:", { id: user.id, email: user.email });
+      // Use the user ID we've determined (either from current session or URL)
+      if (user) {
+        currentUserId = user.id;
+        console.log("User authenticated:", { id: user.id, email: user.email });
+      } else if (crossDeviceUserId) {
+        console.log("Using cross-device user ID:", crossDeviceUserId);
+        currentUserId = crossDeviceUserId;
+        // For cross-device, we need the user to be authenticated
+        // The session should have been established by the callback route
+      }
+
+      if (!currentUserId) {
+        throw new Error("No user ID available for onboarding");
+      }
 
       // Update profile with onboarding data - ensure all fields are present
       const profileData = {
-        id: user.id,
-        email: user.email,
+        id: currentUserId,
+        email: user?.email || "", // Use current user email if available
         username: username.toLowerCase(),
         display_name: displayName || username, // Fallback to username if displayName is empty
         bio: bio || "",
