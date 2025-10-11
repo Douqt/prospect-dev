@@ -26,7 +26,6 @@ export default function OnboardingPage() {
   const [darkMode, setDarkMode] = useState(false);
   const [isFromEmailConfirmation, setIsFromEmailConfirmation] = useState(false);
   const [isCrossDevice, setIsCrossDevice] = useState(false);
-  const [emailFromUrl, setEmailFromUrl] = useState<string | null>(null);
   const [usernameAvailable, setUsernameAvailable] = useState<boolean | null>(null);
   const [checkingUsername, setCheckingUsername] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -40,21 +39,10 @@ export default function OnboardingPage() {
     const callback = searchParams.get('callbackUrl');
     const fromEmail = searchParams.get('from') === 'email_confirmation';
     const crossDevice = searchParams.get('cross_device') === 'true';
-    const encodedEmail = searchParams.get('email');
 
     setCallbackUrl(callback);
     setIsFromEmailConfirmation(fromEmail);
     setIsCrossDevice(crossDevice);
-
-    // Decode the email if it exists in the URL
-    if (encodedEmail) {
-      try {
-        setEmailFromUrl(decodeURIComponent(encodedEmail));
-      } catch (error) {
-        console.error('Failed to decode email parameter:', error);
-        setEmailFromUrl(null);
-      }
-    }
 
     // If from email confirmation, show a toast to indicate this
     if (fromEmail) {
@@ -121,7 +109,7 @@ export default function OnboardingPage() {
         .from("profiles")
         .upsert({
           id: user.id,
-          email: emailFromUrl || user.email, // Use decoded email from URL else user email
+          email: user.email || user.email, // Use decoded email from URL else user email
           username: username.toLowerCase(),
           display_name: displayName || username, // Fallback to username if displayName is empty
           bio: bio || null,
