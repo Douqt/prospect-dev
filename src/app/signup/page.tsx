@@ -2,6 +2,7 @@
 import React, { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { useRouter } from "next/navigation";
+import { getBaseUrl } from "@/lib/utils";
 
 export default function SignupPage() {
   const [email, setEmail] = useState("");
@@ -65,7 +66,7 @@ export default function SignupPage() {
         email: email.trim(),
         password,
         options: {
-          emailRedirectTo: `http://prospect-dev.vercel.app/auth/confirmed`,
+          emailRedirectTo: `${getBaseUrl()}/auth/confirmed`,
         },
       });
 
