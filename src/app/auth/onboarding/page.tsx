@@ -37,17 +37,23 @@ export default function OnboardingPage() {
   useEffect(() => {
     const searchParams = new URLSearchParams(window.location.search);
     const callback = searchParams.get('callbackUrl');
-    const fromEmail = searchParams.get('from') === 'email_confirmation';
+    const fromEmailParam = searchParams.get('from_email');
+    const userId = searchParams.get('user_id');
     const crossDevice = searchParams.get('cross_device') === 'true';
 
     setCallbackUrl(callback);
-    setIsFromEmailConfirmation(fromEmail);
+    setIsFromEmailConfirmation(!!fromEmailParam);
     setIsCrossDevice(crossDevice);
 
+    // If coming from email callback with user_id, we've crossed devices
+    if (fromEmailParam && userId) {
+      setIsCrossDevice(true);
+    }
+
     // If from email confirmation, show a toast to indicate this
-    if (fromEmail) {
+    if (fromEmailParam) {
       toast.success(
-        crossDevice
+        crossDevice || userId
           ? "Email confirmed! Continuing onboarding on this device."
           : "Email confirmed! Let's complete your profile."
       );
@@ -101,26 +107,55 @@ export default function OnboardingPage() {
   const handleFinish = async () => {
     setLoading(true);
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error("User not authenticated");
+      // Log device/browser info for debugging
+      console.log("Onboarding attempt - Device info:", {
+        userAgent: navigator.userAgent,
+        platform: navigator.platform,
+        cookieEnabled: navigator.cookieEnabled,
+        isCrossDevice: isCrossDevice,
+        isFromEmailConfirmation: isFromEmailConfirmation,
+        url: window.location.href
+      });
+
+      const { data: { user }, error: getUserError } = await supabase.auth.getUser();
+      if (getUserError || !user) {
+        console.error("Auth error:", getUserError);
+        throw new Error(`User not authenticated: ${getUserError?.message || 'No user found'}`);
+      }
+
+      console.log("User authenticated:", { id: user.id, email: user.email });
 
       // Update profile with onboarding data - ensure all fields are present
+      const profileData = {
+        id: user.id,
+        email: user.email,
+        username: username.toLowerCase(),
+        display_name: displayName || username, // Fallback to username if displayName is empty
+        bio: bio || "",
+        avatar_url: avatarUrl || null,
+        dark_mode: darkMode,
+        onboarded: true,
+        last_login: new Date().toISOString(), // Update login time
+        updated_at: new Date().toISOString(), // Update timestamp
+      };
+
+      console.log("Upserting profile data:", profileData);
+
       const { error } = await supabase
         .from("profiles")
-        .upsert({
-          id: user.id,
-          email: user.email || user.email, // Use decoded email from URL else user email
-          username: username.toLowerCase(),
-          display_name: displayName || username, // Fallback to username if displayName is empty
-          bio: bio || "",
-          avatar_url: avatarUrl || null,
-          dark_mode: darkMode,
-          onboarded: true,
-          last_login: new Date().toISOString(), // Update login time
-          updated_at: new Date().toISOString(), // Update timestamp
-        });
+        .upsert(profileData);
 
-      if (error) throw error;
+      if (error) {
+        console.error("Database error details:", {
+          code: error.code,
+          message: error.message,
+          details: error.details,
+          hint: error.hint
+        });
+        throw error;
+      }
+
+      console.log("Profile upsert successful");
 
       // Save theme preference to localStorage
       localStorage.setItem("theme", darkMode ? "dark" : "light");
@@ -131,8 +166,14 @@ export default function OnboardingPage() {
       const redirectUrl = callbackUrl || '/';
       router.push(redirectUrl);
     } catch (error) {
-      console.error("Onboarding error:", error);
-      toast.error("Failed to complete onboarding. Please try again.");
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      console.error("Onboarding error details:", {
+        message: errorMessage,
+        stack: error instanceof Error ? error.stack : undefined,
+        name: error instanceof Error ? error.name : undefined,
+        userAgent: navigator.userAgent
+      });
+      toast.error(`Failed to complete onboarding: ${errorMessage}`);
     } finally {
       setLoading(false);
     }
