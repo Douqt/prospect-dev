@@ -1,49 +1,28 @@
 "use client";
-import { createBrowserClient } from '@supabase/ssr'
+import { createServerClient } from '@/lib/supabase-server'
 import { access } from 'fs';
 import { redirect } from "next/navigation";
 import { useEffect, useState } from "react";
 
-export default function ConfirmedPage() {
+export default async function ConfirmedPage() {
   const [status, setStatus] = useState<'loading' | 'success' | 'failed'>('loading');
   const [onboardingRequired, setOnboardingRequired] = useState(false);
 
-  useEffect(() => {
-  (async () => {
-    const params = new URLSearchParams(window.location.hash.substring(1));
-    const type   = params.get('type');
+  const supabase = await createServerClient()
 
-    const supabase = createBrowserClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-    );
+  // 1. PKCE token automatically exchanged → session cookie planted (cross-device)
+  const { data: { user }, error } = await supabase.auth.getUser()
+  if (error || !user) redirect('/login')
 
-    /* 1. let Supabase exchange the hash → cookies */
-    const { data: { session }, error: exchangeErr } = await supabase.auth.getSession();
-    if (exchangeErr || !session) {
-      console.error('exchange failed', exchangeErr);
-      setStatus('failed');
-      setTimeout(() => redirect('/login?error=exchange'), 2000);
-      return;
-    }
+  // 2. Onboarding guard
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('id')
+    .eq('id', user.id)
+    .single()
 
-    /* 2. onboarding check */
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('id')
-      .eq('id', session.user.id)
-      .single();
-
-    if (!profile) {
-      setOnboardingRequired(true);
-      setStatus('success');
-      setTimeout(() => redirect('/auth/onboarding'), 1500);
-    } else {
-      setStatus('success');
-      setTimeout(() => redirect('/'), 1500);
-    }
-  })();
-}, []);
+  if (!profile) redirect('/auth/onboarding')
+  redirect('/feed')
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-background text-foreground">
