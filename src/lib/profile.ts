@@ -30,6 +30,21 @@ export async function upsertProfileOnSignup(userId: string, email?: string, user
   }
 }
 
+export async function userHasProfile(userId: string): Promise<boolean> {
+  if (!userId) return false;
+  try {
+    const { data, error } = await supabase
+      .from("profiles")
+      .select('id') // select 1 limit 1 equivalent
+      .eq("id", userId)
+      .single();
+
+    return !error && !!data;
+  } catch {
+    return false;
+  }
+}
+
 export async function fetchProfile(userId: string) {
   if (!userId) return null;
   try {
