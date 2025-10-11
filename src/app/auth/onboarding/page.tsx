@@ -24,6 +24,8 @@ export default function OnboardingPage() {
   const [bio, setBio] = useState("");
   const [avatarUrl, setAvatarUrl] = useState("");
   const [darkMode, setDarkMode] = useState(false);
+  const [isFromEmailConfirmation, setIsFromEmailConfirmation] = useState(false);
+  const [isCrossDevice, setIsCrossDevice] = useState(false);
   const [usernameAvailable, setUsernameAvailable] = useState<boolean | null>(null);
   const [checkingUsername, setCheckingUsername] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -31,11 +33,25 @@ export default function OnboardingPage() {
 
   const router = useRouter();
 
-  // Extract callback URL from search params on mount
+  // Extract callback URL and cross-device flags from search params on mount
   useEffect(() => {
     const searchParams = new URLSearchParams(window.location.search);
     const callback = searchParams.get('callbackUrl');
+    const fromEmail = searchParams.get('from') === 'email_confirmation';
+    const crossDevice = searchParams.get('cross_device') === 'true';
+
     setCallbackUrl(callback);
+    setIsFromEmailConfirmation(fromEmail);
+    setIsCrossDevice(crossDevice);
+
+    // If from email confirmation, show a toast to indicate this
+    if (fromEmail) {
+      toast.success(
+        crossDevice
+          ? "Email confirmed! Continuing onboarding on this device."
+          : "Email confirmed! Let's complete your profile."
+      );
+    }
   }, []);
 
   // Check username availability with debouncing
@@ -134,6 +150,29 @@ export default function OnboardingPage() {
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-background px-4">
+      {/* Cross-device indicator */}
+      {isFromEmailConfirmation && (
+        <div className="mb-4 max-w-2xl w-full">
+          <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-4">
+            <div className="flex items-center">
+              <div className="flex-shrink-0">
+                <svg className="h-5 w-5 text-green-400" viewBox="0 0 20 20" fill="currentColor">
+                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                </svg>
+              </div>
+              <div className="ml-3">
+                <p className="text-sm font-medium text-green-800 dark:text-green-200">
+                  {isCrossDevice
+                    ? "Email confirmed on another device! Continue onboarding here."
+                    : "Email confirmed! Let's complete your profile."
+                  }
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="w-full max-w-2xl bg-card border border-border rounded-lg shadow-lg">
         {/* Header */}
         <div className="p-8 border-b border-border">

@@ -33,9 +33,9 @@ export default function ConfirmedPage() {
                 window.close();
               }, 2000);
             } else {
-              // Not a popup, redirect directly
+              // Not a popup, redirect directly to onboarding with cross-device flag
               setTimeout(() => {
-                redirect('/auth/onboarding');
+                redirect('/auth/onboarding?from=email_confirmation&cross_device=true');
               }, 1500);
             }
           } else {
