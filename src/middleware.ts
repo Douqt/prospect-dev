@@ -4,6 +4,11 @@ import { NextResponse, type NextRequest } from 'next/server'
 export async function middleware(request: NextRequest) {
   const pathname = request.nextUrl.pathname
 
+  // Debug logging for development only
+  if (process.env.NODE_ENV === 'development') {
+    console.log('🔥 MW hit:', pathname)
+  }
+
   // Create Supabase client with proper cookie handling for production
   let response = NextResponse.next({
     request,
@@ -80,9 +85,8 @@ export async function middleware(request: NextRequest) {
         path     : '/',
         httpOnly : false,
         sameSite : 'lax',
-        secure   : true,            // <-- must be true on Vercel (https)
+        secure   : process.env.NODE_ENV === 'production',
         maxAge   : 60 * 60 * 24 * 30,
-        domain   : '.vercel.app',   // <-- add this line while on *.vercel.app
       });
     }
   }
@@ -100,4 +104,8 @@ export async function middleware(request: NextRequest) {
   return response
 }
 
-export const config = { matcher: ['/'] };
+export const config = {
+  matcher: [
+    '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
+  ],
+}

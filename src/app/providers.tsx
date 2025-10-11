@@ -22,18 +22,18 @@ export default function Providers({ children, initialTheme }: ProvidersProps) {
   const router = useRouter();
   const pathname = usePathname();
 
-  // Client-side onboarding check (works in development when middleware doesn't)
+  // Client-side onboarding check (backup for when middleware fails in production)
   useEffect(() => {
-    // Skip if on auth routes or if in production (let middleware handle it)
+    // Skip if on auth routes
     const authRoutes = ['/login', '/signup', '/auth/check', '/auth/confirm', '/auth/onboarding'];
     const isOnAuthRoute = authRoutes.some(route => pathname.startsWith(route));
 
-    if (isOnAuthRoute || process.env.NODE_ENV === 'production') {
-      // In production, middleware handles this. In dev on auth routes, no check needed
+    if (isOnAuthRoute) {
+      // No check needed on auth routes
       return;
     }
 
-    // Check auth and profile status
+    // Always check (both dev and prod) - middleware might fail sometimes
     const checkOnboarding = async () => {
       try {
         const { data: { user }, error: authError } = await supabase.auth.getUser();
@@ -47,19 +47,21 @@ export default function Providers({ children, initialTheme }: ProvidersProps) {
         const hasProfile = await userHasProfile(user.id);
 
         if (!hasProfile) {
-          console.log('🚨 Client-side: Redirecting to onboarding (no profile)');
+          console.log('🚨 Client-side fallback: Redirecting to onboarding (no profile found)');
           router.push('/auth/onboarding');
           return;
         }
 
         // User has profile, continue normally
-        console.log('✅ Client-side: Profile check passed');
+        console.log('✅ Client-side fallback: Profile check passed');
       } catch (error) {
         console.error('Client-side onboarding check error:', error);
       }
     };
 
-    checkOnboarding();
+    // Small delay to let middleware run first (if it works)
+    const delay = process.env.NODE_ENV === 'production' ? 100 : 0;
+    setTimeout(checkOnboarding, delay);
   }, [pathname, router]);
 
   return (
