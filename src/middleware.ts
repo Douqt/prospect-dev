@@ -9,10 +9,35 @@ export async function middleware(request: NextRequest) {
     console.log('🔥 MW hit:', pathname)
   }
 
-  // Create Supabase client with proper cookie handling for production
-  let response = NextResponse.next({
-    request,
-  })
+  // Check for Supabase auth cookies directly (they're named like sb-{projectId}-auth-token)
+  const cookieNames = request.cookies.getAll().map(c => c.name)
+  const supabaseAuthCookies = cookieNames.filter(name => name.includes('sb-') && name.includes('-auth-token'))
+
+  // If no Supabase auth cookies, user is not authenticated, can return early
+  if (supabaseAuthCookies.length === 0) {
+    // Debug logging for development
+    if (process.env.NODE_ENV === 'development') {
+      const supabaseCookies = cookieNames.filter(name => name.includes('supabase'))
+      console.log('🔥 MW no auth cookies:', 'supabase filtered:', supabaseCookies, 'auth-cookies:', supabaseAuthCookies.length)
+    }
+
+    // Check if this is a protected route
+    const protectedRoutes = ['/feed', '/settings', '/profile']
+    const isProtectedRoute = protectedRoutes.some(route => pathname.startsWith(route))
+
+    if (isProtectedRoute) {
+      if (process.env.NODE_ENV === 'development') {
+        console.log('🚨 Redirecting to login:', pathname, 'no auth cookies')
+      }
+      return NextResponse.redirect(new URL('/login', request.url))
+    }
+
+    // Not a protected route, allow through
+    return NextResponse.next()
+  }
+
+  // User is authenticated (has auth cookies), create Supabase client for profile checks
+  let response = NextResponse.next({ request })
 
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -20,14 +45,12 @@ export async function middleware(request: NextRequest) {
     {
       cookies: {
         getAll() {
-          return request.cookies.getAll()
+          return request.cookies.getAll() // → { name, value }[]
         },
-        setAll(cookiesToSet) {
-          cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value))
-          response = NextResponse.next({
-            request,
-          })
-          cookiesToSet.forEach(({ name, value, options }) =>
+        setAll(cookies) {
+          cookies.forEach(({ name, value }) => request.cookies.set(name, value))
+          response = NextResponse.next({ request })
+          cookies.forEach(({ name, value, options }) =>
             response.cookies.set(name, value, options)
           )
         },
@@ -35,9 +58,15 @@ export async function middleware(request: NextRequest) {
     }
   )
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+  // ===  your useEffect logic  ===
+  const { data: { user }, error } = await supabase.auth.getUser()
+
+  // Debug logging for development
+  if (process.env.NODE_ENV === 'development') {
+    const supabaseCookies = cookieNames.filter(name => name.includes('supabase'))
+    //console.log('🔥 MW user:', user?.id ?? 'no-user', 'session?:', !!session)
+    console.log('🔥 Cookies available:', cookieNames.length, 'supabase filtered:', supabaseCookies, 'auth-cookies:', supabaseAuthCookies.length)
+  }
 
   // Define auth routes - these should not trigger onboarding checks
   const authRoutes = ['/login', '/signup', '/auth/check', '/auth/confirm']
@@ -52,7 +81,7 @@ export async function middleware(request: NextRequest) {
 
   // Universal onboarding guard: Check if authenticated user has profile row
   if (user && !isAuthRoute) {
-    // Single RLS-respecting SQL query: select 1 from profiles where id = auth.uid() limit 1
+    // Create the Supabase client now that we know we have auth cookies
     const { data: profile, error } = await supabase
       .from('profiles')
       .select('id') // Efficient: select 1 limit 1 equivalent
@@ -95,7 +124,16 @@ export async function middleware(request: NextRequest) {
   const protectedRoutes = ['/feed', '/settings', '/profile']
   const isProtectedRoute = protectedRoutes.some(route => pathname.startsWith(route))
 
+  // Debug logging for protected routes
+  if (process.env.NODE_ENV === 'development' && isProtectedRoute) {
+    console.log('🔥 Protected route check:', pathname, 'user?', !!user)
+  }
+
   if (isProtectedRoute && !user) {
+    // Debug logging before redirect
+    if (process.env.NODE_ENV === 'development') {
+      console.log('🚨 Redirecting to login:', pathname, 'no user')
+    }
     // Not authenticated, redirect to login
     const loginUrl = new URL('/login', request.url)
     return NextResponse.redirect(loginUrl)

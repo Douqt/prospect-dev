@@ -8,14 +8,31 @@ export default function ConfirmedPage() {
   const [onboardingRequired, setOnboardingRequired] = useState(false);
 
   useEffect(() => {
-    // Extract email from URL params for cross-device onboarding
+    // Extract tokens from URL params for session exchange
+    const hashParams = new URLSearchParams(window.location.hash.substring(1));
     const urlParams = new URLSearchParams(window.location.search);
-    const emailFromUrl = urlParams.get('email');
 
-    // token is already consumed by Supabase, just wait for session
-    supabase.auth.getSession().then(async ({ data: { session } }) => {
-      if (session) {
-        // Check if user needs onboarding
+    // Check for confirmation tokens in hash
+    const accessToken = hashParams.get('access_token');
+    const refreshToken = hashParams.get('refresh_token');
+    const type = hashParams.get('type');
+
+    if (accessToken && refreshToken && type === 'signup') {
+      // Exchange tokens to establish session
+      supabase.auth.setSession({
+        access_token: accessToken,
+        refresh_token: refreshToken
+      }).then(async ({ data: { session }, error }) => {
+        if (error || !session) {
+          console.error('Session exchange failed:', error);
+          setStatus('failed');
+          setTimeout(() => {
+            redirect('/login?error=session_exchange_failed');
+          }, 2000);
+          return;
+        }
+
+        // Session established successfully! Check for profile/onboarding
         try {
           const { data: profile } = await supabase
             .from('profiles')
@@ -41,16 +58,24 @@ export default function ConfirmedPage() {
           console.error('Profile check error:', error);
           setStatus('failed');
           setTimeout(() => {
-            redirect('/login?error=confirmation_failed');
+            redirect('/login?error=profile_check_failed');
           }, 2000);
         }
-      } else {
-        setStatus('failed');
-        setTimeout(() => {
-          redirect('/login?error=confirmation_failed');
-        }, 2000);
-      }
-    });
+      });
+    } else if (accessToken && refreshToken && type === 'recovery') {
+      // Password reset - not signup confirmation
+      setStatus('failed');
+      setTimeout(() => {
+        redirect('/login?error=invalid_confirmation_type');
+      }, 2000);
+    } else {
+      // No tokens found - invalid confirmation attempt
+      console.error('No tokens found in URL');
+      setStatus('failed');
+      setTimeout(() => {
+        redirect('/login?error=no_tokens');
+      }, 2000);
+    }
   }, []);
 
   return (
@@ -62,7 +87,7 @@ export default function ConfirmedPage() {
               Confirming your email
             </h1>
             <p className="text-sm text-muted-foreground mb-4">
-              Please wait while we verify your email address...
+              Establishing your session...
             </p>
             <div className="flex justify-center">
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
@@ -76,7 +101,7 @@ export default function ConfirmedPage() {
               Email confirmed! 🎉
             </h1>
             <p className="text-sm text-muted-foreground mb-4">
-              Your email has been confirmed. Taking you to onboarding...
+              Session established! Taking you to complete your profile...
             </p>
             <div className="flex justify-center">
               <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary"></div>
@@ -90,7 +115,7 @@ export default function ConfirmedPage() {
               Welcome back! 🎉
             </h1>
             <p className="text-sm text-muted-foreground mb-4">
-              Your session has been restored.
+              Your account is ready. Redirecting...
             </p>
             <div className="flex justify-center">
               <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary"></div>
@@ -104,7 +129,7 @@ export default function ConfirmedPage() {
               Confirmation failed
             </h1>
             <p className="text-sm text-muted-foreground mb-4">
-              There was an issue confirming your email. Please try again or contact support.
+              There was an issue establishing your session. Please try again or contact support.
             </p>
           </>
         )}
