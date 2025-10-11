@@ -1,8 +1,9 @@
 "use client";
-import { createBrowserClient } from '@supabase/ssr'
+import { createServerClient} from '@/lib/supabase-server'
 import { access } from 'fs';
 import { redirect } from "next/navigation";
 import { useEffect, useState } from "react";
+import { cookies } from 'next/headers'
 
 export default function ConfirmedPage() {
   const [status, setStatus] = useState<'loading' | 'success' | 'failed'>('loading');
@@ -11,16 +12,22 @@ export default function ConfirmedPage() {
   useEffect(() => {
     (async () => {
       try {
-        const supabase = createBrowserClient(
-          process.env.NEXT_PUBLIC_SUPABASE_URL!,
-          process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-        );
+        // const supabase = createBrowserClient(
+        //   process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        //   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+        // );
 
-        /* 1. Try to get session on this device */
-        const { data: { session }, error: exchangeErr } = await supabase.auth.getSession();
+        // /* 1. Try to get session on this device */
+        // const { data: { session }, error: exchangeErr } = await supabase.auth.getSession();
 
-        let userId = session?.user?.id;
-        let hasSession = !!session;
+        // let userId = session?.user?.id;
+        // let hasSession = !!session;
+
+        const supabase = await createServerClient();
+        const { data: { session }, error: exchangeErr } = await supabase.auth.getSession()
+
+        let userId = session?.user?.id
+        let hasSession = !!session
 
         /* If no session, try to detect from URL parameters (cross-device confirmation) */
         const urlParams = new URLSearchParams(window.location.search);
