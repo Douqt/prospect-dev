@@ -1,47 +1,46 @@
-// app/auth/confirmed/page.tsx
 "use client";
+import { createBrowserClient } from '@supabase/ssr'
+import { access } from 'fs';
+import { redirect } from "next/navigation";
 import { useEffect, useState } from "react";
-import { confirmEmail } from "./actions";
 
 export default function ConfirmedPage() {
   const [status, setStatus] = useState<'loading' | 'success' | 'failed'>('loading');
   const [onboardingRequired, setOnboardingRequired] = useState(false);
 
   useEffect(() => {
-    (async () => {
-      try {
-        const result = await confirmEmail();
-        
-        if (result.error) {
-          console.error('confirmation failed', result.error);
-          setStatus('failed');
-          setTimeout(() => {
-            window.location.href = '/login?error=exchange';
-          }, 2000);
-          return;
-        }
+  (async () => {
+    const supabase = createBrowserClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+    );
 
-        if (result.needsOnboarding) {
-          setOnboardingRequired(true);
-          setStatus('success');
-          setTimeout(() => {
-            window.location.href = '/auth/onboarding';
-          }, 1500);
-        } else {
-          setStatus('success');
-          setTimeout(() => {
-            window.location.href = '/';
-          }, 1500);
-        }
-      } catch (err) {
-        console.error('unexpected error', err);
-        setStatus('failed');
-        setTimeout(() => {
-          window.location.href = '/login?error=exchange';
-        }, 2000);
-      }
-    })();
-  }, []);
+    /* 1. let Supabase exchange the hash → cookies */
+    const { data: { session }, error: exchangeErr } = await supabase.auth.getSession();
+    if (exchangeErr || !session) {
+      console.error('exchange failed', exchangeErr);
+      setStatus('failed');
+      setTimeout(() => redirect('/login?error=exchange'), 2000);
+      return;
+    }
+
+    /* 2. onboarding check */
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('id')
+      .eq('id', session.user.id)
+      .single();
+
+    if (!profile) {
+      setOnboardingRequired(true);
+      setStatus('success');
+      setTimeout(() => redirect('/auth/onboarding'), 1500);
+    } else {
+      setStatus('success');
+      setTimeout(() => redirect('/'), 1500);
+    }
+  })();
+}, []);
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-background text-foreground">
