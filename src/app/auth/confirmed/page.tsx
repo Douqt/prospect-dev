@@ -1,5 +1,6 @@
 "use client";
-import { supabase } from "@/lib/supabaseClient";
+import { createBrowserClient } from '@supabase/ssr'
+import { access } from 'fs';
 import { redirect } from "next/navigation";
 import { useEffect, useState } from "react";
 
@@ -8,75 +9,41 @@ export default function ConfirmedPage() {
   const [onboardingRequired, setOnboardingRequired] = useState(false);
 
   useEffect(() => {
-    // Extract tokens from URL params for session exchange
-    const hashParams = new URLSearchParams(window.location.hash.substring(1));
-    const urlParams = new URLSearchParams(window.location.search);
+  (async () => {
+    const params = new URLSearchParams(window.location.hash.substring(1));
+    const type   = params.get('type');
 
-    // Check for confirmation tokens in hash
-    const accessToken = hashParams.get('access_token');
-    const refreshToken = hashParams.get('refresh_token');
-    const type = hashParams.get('type');
+    const supabase = createBrowserClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+    );
 
-    if (accessToken && refreshToken && type === 'signup') {
-      // Exchange tokens to establish session
-      supabase.auth.setSession({
-        access_token: accessToken,
-        refresh_token: refreshToken
-      }).then(async ({ data: { session }, error }) => {
-        if (error || !session) {
-          console.error('Session exchange failed:', error);
-          setStatus('failed');
-          setTimeout(() => {
-            redirect('/login?error=session_exchange_failed');
-          }, 2000);
-          return;
-        }
-
-        // Session established successfully! Check for profile/onboarding
-        try {
-          const { data: profile } = await supabase
-            .from('profiles')
-            .select('onboarded')
-            .eq('id', session.user.id)
-            .single();
-
-          if (!profile || !profile.onboarded) {
-            // User needs onboarding
-            setOnboardingRequired(true);
-            setStatus('success');
-            setTimeout(() => {
-              redirect('/auth/onboarding?from=email_confirmation&cross_device=true');
-            }, 1500);
-          } else {
-            // User is already onboarded, go home
-            setStatus('success');
-            setTimeout(() => {
-              redirect('/');
-            }, 1500);
-          }
-        } catch (error) {
-          console.error('Profile check error:', error);
-          setStatus('failed');
-          setTimeout(() => {
-            redirect('/login?error=profile_check_failed');
-          }, 2000);
-        }
-      });
-    } else if (accessToken && refreshToken && type === 'recovery') {
-      // Password reset - not signup confirmation
+    /* 1. let Supabase exchange the hash → cookies */
+    const { data: { session }, error: exchangeErr } = await supabase.auth.getSession();
+    if (exchangeErr || !session) {
+      console.error('exchange failed', exchangeErr);
       setStatus('failed');
-      setTimeout(() => {
-        redirect('/login?error=invalid_confirmation_type');
-      }, 2000);
-    } else {
-      // No tokens found - invalid confirmation attempt
-      console.error('No tokens found in URL');
-      setStatus('failed');
-      setTimeout(() => {
-        redirect('/login?error=no_tokens');
-      }, 2000);
+      setTimeout(() => redirect('/login?error=exchange'), 2000);
+      return;
     }
-  }, []);
+
+    /* 2. onboarding check */
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('id')
+      .eq('id', session.user.id)
+      .single();
+
+    if (!profile) {
+      setOnboardingRequired(true);
+      setStatus('success');
+      setTimeout(() => redirect('/auth/onboarding'), 1500);
+    } else {
+      setStatus('success');
+      setTimeout(() => redirect('/'), 1500);
+    }
+  })();
+}, []);
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-background text-foreground">
