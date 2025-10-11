@@ -8,6 +8,10 @@ export default function ConfirmedPage() {
   const [onboardingRequired, setOnboardingRequired] = useState(false);
 
   useEffect(() => {
+    // Extract email from URL params for cross-device onboarding
+    const urlParams = new URLSearchParams(window.location.search);
+    const emailFromUrl = urlParams.get('email');
+
     // token is already consumed by Supabase, just wait for session
     supabase.auth.getSession().then(async ({ data: { session } }) => {
       if (session) {
@@ -23,52 +27,27 @@ export default function ConfirmedPage() {
             // User needs onboarding
             setOnboardingRequired(true);
             setStatus('success');
-
-            // Try to communicate with parent/original tab to redirect them
-            if (window.opener) {
-              // This is a popup - tell the parent to navigate to onboarding
-              window.opener.postMessage({ type: 'EMAIL_CONFIRMED_NEEDS_ONBOARDING' }, '*');
-              // Close this popup after a short delay
-              setTimeout(() => {
-                window.close();
-              }, 2000);
-            } else {
-              // Not a popup, redirect directly to onboarding with cross-device flag
-              setTimeout(() => {
-                redirect('/auth/onboarding?from=email_confirmation&cross_device=true');
-              }, 1500);
-            }
+            setTimeout(() => {
+              redirect('/auth/onboarding?from=email_confirmation&cross_device=true');
+            }, 1500);
           } else {
             // User is already onboarded, go home
             setStatus('success');
             setTimeout(() => {
-              if (window.opener) {
-                window.opener.postMessage({ type: 'EMAIL_CONFIRMED_FINISHED' }, '*');
-                setTimeout(() => window.close(), 1500);
-              } else {
-                redirect('/');
-              }
+              redirect('/');
             }, 1500);
           }
         } catch (error) {
           console.error('Profile check error:', error);
           setStatus('failed');
           setTimeout(() => {
-            if (window.opener) {
-              window.close();
-            } else {
-              redirect('/login?error=confirmation_failed');
-            }
+            redirect('/login?error=confirmation_failed');
           }, 2000);
         }
       } else {
         setStatus('failed');
         setTimeout(() => {
-          if (window.opener) {
-            window.close();
-          } else {
-            redirect('/login?error=confirmation_failed');
-          }
+          redirect('/login?error=confirmation_failed');
         }, 2000);
       }
     });
@@ -97,7 +76,7 @@ export default function ConfirmedPage() {
               Email confirmed! 🎉
             </h1>
             <p className="text-sm text-muted-foreground mb-4">
-              Your email has been confirmed. {window.opener ? 'This window will close and return you to the onboarding process.' : 'Taking you to onboarding...'}
+              Your email has been confirmed. Taking you to onboarding...
             </p>
             <div className="flex justify-center">
               <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary"></div>
@@ -111,7 +90,7 @@ export default function ConfirmedPage() {
               Welcome back! 🎉
             </h1>
             <p className="text-sm text-muted-foreground mb-4">
-              {window.opener ? 'This window will close and return you to the app.' : 'Taking you to the app...'}
+              Your session has been restored.
             </p>
             <div className="flex justify-center">
               <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary"></div>
@@ -126,7 +105,6 @@ export default function ConfirmedPage() {
             </h1>
             <p className="text-sm text-muted-foreground mb-4">
               There was an issue confirming your email. Please try again or contact support.
-              {window.opener ? ' This window will close shortly.' : ''}
             </p>
           </>
         )}

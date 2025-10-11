@@ -1,8 +1,8 @@
-import { createClient } from '@/lib/supabase-server';
+import { createServerClient } from '@/lib/supabase-server';
 
 export async function getServerTheme() {
   try {
-    const supabase = await createClient();
+    const supabase = await createServerClient();
 
     // Get user session to check if logged in
     const { data: { session } } = await supabase.auth.getSession();

@@ -1,8 +1,7 @@
 "use client";
 import React, { useState, useEffect } from "react";
-import { supabase } from "@/lib/supabaseClient";
 import { useRouter } from "next/navigation";
-import { getBaseUrl } from "@/lib/utils";
+import { signUp } from "@/app/actions/auth";
 
 export default function SignupPage() {
   const [email, setEmail] = useState("");
@@ -19,17 +18,17 @@ export default function SignupPage() {
   useEffect(() => {
     const isDark = document.documentElement.classList.contains("dark");
     setDarkMode(isDark);
-    
+
     const observer = new MutationObserver(() => {
       const isDark = document.documentElement.classList.contains("dark");
       setDarkMode(isDark);
     });
-    
+
     observer.observe(document.documentElement, {
       attributes: true,
       attributeFilter: ["class"]
     });
-    
+
     return () => observer.disconnect();
   }, []);
 
@@ -62,19 +61,10 @@ export default function SignupPage() {
     setIsExisting(false);
 
     try {
-      const { data, error } = await supabase.auth.signUp({
-        email: email.trim(),
-        password,
-        options: {
-          emailRedirectTo: `${getBaseUrl().trim()}/auth/confirmed`,
-        },
-      });
+      const result = await signUp(email.trim(), password);
 
-      console.log("Signup response - data:", data);
-      console.log("Signup response - error:", error);
-
-      if (error) {
-        const msg = error.message;
+      if (!result.ok) {
+        const msg = result.msg;
 
         // Check for various "already exists" error patterns
         if (
@@ -89,30 +79,11 @@ export default function SignupPage() {
           return; // Exit early - don't throw, just show error
         }
 
-        // Handle other types of errors
         throw new Error(msg);
       }
 
-      // Success case: user is created, awaiting email confirmation
-      if (data?.user) {
-        // Note: session is null when email confirmation is enabled (normal behavior)
-        try {
-          const { upsertProfileLastLogin } = await import("../../lib/profile");
-          await upsertProfileLastLogin(
-            data.user.id,
-            data.user.email ?? undefined,
-          );
-        } catch (profileErr) {
-          console.error("Profile creation warning (non-critical):", profileErr);
-          // Don't throw here - profile creation failure shouldn't block signup
-        }
-
-        // Navigate to email confirmation page
-        router.push("/auth/check-email");
-      } else {
-        // Unexpected case
-        throw new Error("Signup completed but no user data returned");
-      }
+      // Success case: Navigate to email confirmation page
+      router.push("/auth/check-email");
     } catch (err) {
       const error = err as { message?: string };
       setError(error?.message || "Failed to create account");
@@ -169,17 +140,10 @@ export default function SignupPage() {
                     setResetLoading(true);
                     setResetMsg(null);
                     try {
-                      const { data, error } =
-                        await supabase.auth.resetPasswordForEmail(email);
-                      if (error) {
-                        setResetMsg("Failed to send password reset email.");
-                      } else {
-                        setResetMsg(
-                          "Password reset email sent. Check your inbox.",
-                        );
-                      }
+                      // For now, just show a message since reset password would require a Server Action too
+                      setResetMsg("Please sign in to reset your password.");
                     } catch (e) {
-                      setResetMsg("Failed to send password reset email.");
+                      setResetMsg("Please sign in to reset your password.");
                     } finally {
                       setResetLoading(false);
                     }
@@ -187,7 +151,7 @@ export default function SignupPage() {
                   disabled={resetLoading || !email}
                   className="text-sm text-primary hover:underline disabled:opacity-50"
                 >
-                  {resetLoading ? "Sending..." : "Reset password"}
+                  {resetLoading ? "Loading..." : "Reset password"}
                 </button>
               </div>
               {resetMsg && (
