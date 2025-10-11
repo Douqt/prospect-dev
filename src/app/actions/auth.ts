@@ -2,6 +2,7 @@
 
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
+import { redirect } from 'next/navigation'
 
 export async function signUp(email: string, password: string) {
   const cookieStore = await cookies()
@@ -37,5 +38,8 @@ export async function signUp(email: string, password: string) {
   })
 
   if (error) return { ok: false, msg: error.message }
-  return { ok: true }
+
+  // For email-based auth, no session is created immediately
+  // The user must confirm their email first
+  return { ok: true, needsConfirmation: true, email: email.trim() }
 }
