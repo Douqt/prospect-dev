@@ -112,7 +112,7 @@ export default function OnboardingPage() {
           email: user.email || user.email, // Use decoded email from URL else user email
           username: username.toLowerCase(),
           display_name: displayName || username, // Fallback to username if displayName is empty
-          bio: bio || null,
+          bio: bio || "",
           avatar_url: avatarUrl || null,
           dark_mode: darkMode,
           onboarded: true,
