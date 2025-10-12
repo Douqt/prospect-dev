@@ -62,7 +62,7 @@ export function DiscussionList({ category }: DiscussionListProps) {
       const finalDiscussionsData = discussionsWithProfiles;
 
       // Transform data to match our interface
-      return finalDiscussionsData.map((discussion: any) => ({
+      return finalDiscussionsData.map((discussion: { id: string; [key: string]: unknown }) => ({
         ...discussion,
         _count: {
           comments: discussion.comment_count,

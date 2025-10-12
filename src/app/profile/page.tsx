@@ -19,7 +19,14 @@ export default function ProfilePage() {
 
   const [isCurrentUser, setIsCurrentUser] = useState(false);
   const [currentUserId, setCurrentUserId] = useState<string>("");
-  const [userData, setUserData] = useState<any>(null);
+  const [userData, setUserData] = useState<{
+    id?: string;
+    username?: string;
+    display_name?: string;
+    bio?: string;
+    avatar_url?: string;
+    created_at?: string;
+  } | null>(null);
 
   // Get current user's profile
   const { profile: currentProfile } = useProfile();
@@ -182,8 +189,8 @@ export default function ProfilePage() {
               </div>
             ) : userPosts && userPosts.length > 0 ? (
               <div className="space-y-4">
-                {userPosts.map((post: any) => (
-                  <DiscussionPost key={post.id} discussion={post} />
+                {userPosts.map((post: { id: string; [key: string]: unknown }) => (
+                  <DiscussionPost key={post.id} discussion={post as any} />
                 ))}
               </div>
             ) : (
