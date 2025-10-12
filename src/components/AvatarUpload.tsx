@@ -44,6 +44,28 @@ export function AvatarUpload({ currentUrl, onUpload }: AvatarUploadProps) {
     fileInputRef.current?.click();
   };
 
+  const deleteOldAvatar = async (avatarUrl: string) => {
+    try {
+      // Extract file path from Supabase public URL
+      // URL format: https://xxx.supabase.co/storage/v1/object/public/avatars/...filepath...
+      const urlParts = avatarUrl.split('/storage/v1/object/public/avatars/');
+      if (urlParts.length === 2) {
+        const filePath = urlParts[1]; // This will be "avatars/filename.ext"
+        const { error } = await supabase.storage
+          .from('avatars')
+          .remove([filePath]);
+
+        if (error && error.message !== 'Object not found') {
+          // Only log error if it's not "Object not found" (file might already be deleted)
+          console.debug('Could not delete old avatar:', error);
+        }
+      }
+    } catch (error) {
+      console.debug('Error deleting old avatar:', error);
+      // Don't throw - we don't want this to block the new upload
+    }
+  };
+
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -64,6 +86,11 @@ export function AvatarUpload({ currentUrl, onUpload }: AvatarUploadProps) {
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("User not authenticated");
+
+      // Delete old avatar if it exists
+      if (avatarUrl) {
+        await deleteOldAvatar(avatarUrl);
+      }
 
       // Create unique filename
       const fileExt = file.name.split('.').pop();
