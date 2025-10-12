@@ -11,6 +11,28 @@ import { Button } from "@/components/ui/button";
 import { DiscussionPost } from "@/components/discussions/DiscussionPost";
 import { useQuery } from "@tanstack/react-query";
 
+interface Discussion {
+  id: string;
+  title: string;
+  content: string;
+  user_id: string;
+  image_url?: string;
+  category: string;
+  created_at: string;
+  profiles: {
+    username?: string;
+    display_name?: string;
+    avatar_url?: string;
+  };
+  _count: {
+    comments: number;
+    votes: {
+      up: number;
+      down: number;
+    };
+  };
+}
+
 export default function ProfilePage() {
   const params = useParams();
   const username = params?.username as string | undefined;
@@ -180,8 +202,8 @@ export default function ProfilePage() {
               </div>
             ) : userPosts && userPosts.length > 0 ? (
               <div className="space-y-4">
-                {userPosts.map((post: { id: string; [key: string]: unknown }) => (
-                  <DiscussionPost key={post.id} discussion={post as any} />
+                {userPosts.map((post: Discussion) => (
+                  <DiscussionPost key={post.id} discussion={post} />
                 ))}
               </div>
             ) : (

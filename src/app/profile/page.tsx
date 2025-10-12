@@ -189,8 +189,8 @@ export default function ProfilePage() {
               </div>
             ) : userPosts && userPosts.length > 0 ? (
               <div className="space-y-4">
-                {userPosts.map((post: { id: string; [key: string]: unknown }) => (
-                  <DiscussionPost key={post.id} discussion={post as any} />
+                {userPosts.map((post: { id: string; title: string; content: string; user_id: string; image_url?: string; category: string; created_at: string; profiles: { username?: string; display_name?: string; avatar_url?: string }; _count: { comments: number; votes: { up: number; down: number } } }) => (
+                  <DiscussionPost key={post.id} discussion={post} />
                 ))}
               </div>
             ) : (
