@@ -107,16 +107,6 @@ export default function OnboardingPage() {
   const handleFinish = async () => {
     setLoading(true);
     try {
-      // Log device/browser info for debugging
-      console.log("Onboarding attempt - Device info:", {
-        userAgent: navigator.userAgent,
-        platform: navigator.platform,
-        cookieEnabled: navigator.cookieEnabled,
-        isCrossDevice: isCrossDevice,
-        isFromEmailConfirmation: isFromEmailConfirmation,
-        url: window.location.href
-      });
-
       // Get user ID from URL params for cross-device flows
       const urlParams = new URLSearchParams(window.location.search);
       const crossDeviceUserId = urlParams.get('user_id');
@@ -133,9 +123,7 @@ export default function OnboardingPage() {
       // Use the user ID we've determined (either from current session or URL)
       if (user) {
         currentUserId = user.id;
-        console.log("User authenticated:", { id: user.id, email: user.email });
       } else if (crossDeviceUserId) {
-        console.log("Using cross-device user ID:", crossDeviceUserId);
         currentUserId = crossDeviceUserId;
         // For cross-device, we need the user to be authenticated
         // The session should have been established by the callback route
@@ -159,23 +147,11 @@ export default function OnboardingPage() {
         updated_at: new Date().toISOString(), // Update timestamp
       };
 
-      console.log("Upserting profile data:", profileData);
-
       const { error } = await supabase
         .from("profiles")
         .upsert(profileData);
 
-      if (error) {
-        console.error("Database error details:", {
-          code: error.code,
-          message: error.message,
-          details: error.details,
-          hint: error.hint
-        });
-        throw error;
-      }
-
-      console.log("Profile upsert successful");
+      if (error) throw error;
 
       // Save theme preference to localStorage
       localStorage.setItem("theme", darkMode ? "dark" : "light");

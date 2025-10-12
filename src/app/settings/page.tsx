@@ -87,10 +87,12 @@ export default function SettingsPage() {
         .update({
           display_name: displayName.trim(),
           bio: bio.slice(0, 160), // Enforce limit
-          avatar_url: avatarUrl || null,
+          avatar_url: avatarUrl || profile.avatar_url || null, // Keep existing if none set
           ...usernameUpdate,
         })
         .eq("id", profile.id);
+
+      console.log("THIS IS MY AVATAR URL", avatarUrl);
 
       if (error) throw error;
 
@@ -193,7 +195,7 @@ export default function SettingsPage() {
                   currentUrl={avatarUrl}
                   onUpload={(url) => {
                     setAvatarUrl(url);
-                    handleSave();
+                    // Don't auto-save here - let user save manually
                   }}
                 />
               </div>

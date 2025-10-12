@@ -46,27 +46,7 @@ export default function NavBar() {
     return () => s.data?.subscription?.unsubscribe();
   }, []);
 
-  // Profile loading commented out as /api/profile endpoint doesn't exist
-  // useEffect(() => {
-  //   if (!user) return;
-  //   // fetch profile via server API using access token
-  //   const load = async () => {
-  //     try {
-  //       const token = (await supabase.auth.getSession()).data.session
-  //         ?.access_token;
-  //       if (!token) return;
-  //       const r = await fetch("/api/profile", {
-  //         headers: { Authorization: `Bearer ${token}` },
-  //       });
-  //       if (!r.ok) return;
-  //       const json = await r.json();
-  //       setProfile(json.profile ?? null);
-  //     } catch (e) {
-  //       console.debug("failed loading profile", e);
-  //     }
-  //   };
-  //   load();
-  // }, [user]);
+
 
   // Fetch profile data when user changes
   useEffect(() => {
