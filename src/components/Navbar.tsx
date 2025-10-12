@@ -68,26 +68,114 @@ export default function NavBar() {
   //   load();
   // }, [user]);
 
-  // Fetch displayName when user changes
+  // Fetch profile data when user changes
   useEffect(() => {
-    if (!user?.id) return;
+    if (!user?.id) {
+      setDisplayName(null);
+      setProfile(null);
+      return;
+    }
 
-    const fetchDisplayName = async () => {
+    const fetchProfile = async () => {
       try {
-        const { data } = await supabase
-          .from('profiles')
-          .select('display_name')
-          .eq('id', user.id)
-          .single();
+        // Use the server API for profile data
+        const token = (await supabase.auth.getSession()).data.session
+          ?.access_token;
+        if (!token) {
+          // Fallback to client-side fetch for display name
+          const displayResult = await supabase
+            .from('profiles')
+            .select('display_name')
+            .eq('id', user.id)
+            .single();
+          setDisplayName(displayResult.data?.display_name || null);
+          setProfile(null);
+          return;
+        }
 
-        setDisplayName(data?.display_name || null);
+        const r = await fetch(`/api/profile?userId=${user.id}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+
+        if (!r.ok) {
+          // Fallback to client-side
+          const displayResult = await supabase
+            .from('profiles')
+            .select('display_name')
+            .eq('id', user.id)
+            .single();
+          setDisplayName(displayResult.data?.display_name || null);
+          setProfile(null);
+        } else {
+          const json = await r.json();
+          const profileData = json.profile;
+          setProfile(profileData || null);
+          setDisplayName(profileData?.display_name || null);
+        }
       } catch (error) {
-        console.debug('Could not fetch displayName:', error);
-        setDisplayName(null);
+        console.debug("Could not fetch profile:", error);
+        // Fallback to just display name
+        try {
+          const { data } = await supabase
+            .from('profiles')
+            .select('display_name')
+            .eq('id', user.id)
+            .single();
+          setDisplayName(data?.display_name || null);
+          setProfile(null);
+        } catch (fallbackError) {
+          console.debug('Fallback display name fetch failed:', fallbackError);
+          setDisplayName(null);
+          setProfile(null);
+        }
       }
     };
 
-    fetchDisplayName();
+    fetchProfile();
+  }, [user?.id]);
+
+  // Listen for profile updates (e.g., from settings page)
+  useEffect(() => {
+    const handleProfileUpdate = () => {
+      // Refetch profile when settings are updated
+      if (user?.id) {
+        const refetchProfile = async () => {
+          try {
+            const token = (await supabase.auth.getSession()).data.session
+              ?.access_token;
+            if (token) {
+              const r = await fetch(`/api/profile?userId=${user.id}`, {
+                headers: { Authorization: `Bearer ${token}` },
+              });
+              if (r.ok) {
+                const json = await r.json();
+                const profileData = json.profile;
+                setProfile(profileData || null);
+                setDisplayName(profileData?.display_name || null);
+              }
+            }
+          } catch (error) {
+            console.debug('Profile refetch failed:', error);
+          }
+        };
+        refetchProfile();
+      }
+    };
+
+    // Listen for custom event or storage changes
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === 'profile_updated') {
+        handleProfileUpdate();
+      }
+    };
+
+    window.addEventListener('storage', handleStorageChange);
+    window.addEventListener('profileUpdated', handleProfileUpdate);
+
+    return () => {
+      window.removeEventListener('storage', handleStorageChange);
+      window.removeEventListener('profileUpdated', handleProfileUpdate);
+    };
   }, [user?.id]);
 
   useEffect(() => {
