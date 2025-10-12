@@ -97,6 +97,14 @@ export default function SettingsPage() {
       toast.success("Profile updated successfully");
       setNewUsername(""); // Clear the new username state
       loadProfile(); // Reload to update the current username
+
+      // Notify navbar to refresh profile data
+      try {
+        localStorage.setItem('profile_updated', Date.now().toString());
+        window.dispatchEvent(new CustomEvent('profileUpdated'));
+      } catch (e) {
+        console.debug("Could not trigger profile update notification:", e);
+      }
     } catch (error) {
       console.error("Error saving profile:", error);
       toast.error("Failed to update profile");
