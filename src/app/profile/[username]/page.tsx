@@ -6,10 +6,8 @@ import Sidebar from "@/components/Sidebar";
 import Navbar from "@/components/Navbar";
 import { GridBackground } from "@/components/GridBackground";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { useProfile } from "@/hooks/useProfile";
 import { DiscussionPost } from "@/components/discussions/DiscussionPost";
 import { useQuery } from "@tanstack/react-query";
 
@@ -20,9 +18,6 @@ export default function ProfilePage() {
   const [isCurrentUser, setIsCurrentUser] = useState(false);
   const [currentUserId, setCurrentUserId] = useState<string>("");
   const [userData, setUserData] = useState<any>(null);
-
-  // Get current user's profile
-  const { profile: currentProfile } = useProfile();
 
   // Check if viewing own profile or someone else's
   useEffect(() => {
@@ -40,15 +35,11 @@ export default function ProfilePage() {
 
         setUserData(profileData);
         setIsCurrentUser(user?.id === profileData?.id);
-      } else {
-        // No username provided, this is own profile but should be accessed via /[username]
-        setUserData(currentProfile);
-        setIsCurrentUser(true);
       }
     };
 
     checkAuth();
-  }, [username, currentProfile]);
+  }, [username]);
 
   const displayName = userData?.display_name || userData?.username || "User";
   const joinDate = userData?.created_at ?
