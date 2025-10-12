@@ -117,6 +117,7 @@ export default function NavBar() {
   // Listen for profile updates (e.g., from settings page)
   useEffect(() => {
     const handleProfileUpdate = () => {
+      console.log('🔄 Navbar: Profile update event received');
       // Refetch profile when settings are updated
       if (user?.id) {
         const refetchProfile = async () => {
@@ -132,6 +133,7 @@ export default function NavBar() {
                 const profileData = json.profile;
                 setProfile(profileData || null);
                 setDisplayName(profileData?.display_name || null);
+                console.log('🔄 Navbar: Profile data updated');
               }
             }
           } catch (error) {
@@ -142,19 +144,31 @@ export default function NavBar() {
       }
     };
 
+    // Also handle immediate avatar updates (avatar uploaded to storage but not yet saved to profile)
+    const handleAvatarUpdate = () => {
+      console.log('🔄 Navbar: Avatar update event received');
+      // For avatar updates, we refresh the page to show the new avatar
+      // The avatar component uploaded to storage, so when page reloads, the component will fetch it
+      window.location.reload();
+    };
+
     // Listen for custom event or storage changes
     const handleStorageChange = (e: StorageEvent) => {
       if (e.key === 'profile_updated') {
         handleProfileUpdate();
+      } else if (e.key === 'avatar_updated') {
+        handleAvatarUpdate();
       }
     };
 
     window.addEventListener('storage', handleStorageChange);
     window.addEventListener('profileUpdated', handleProfileUpdate);
+    window.addEventListener('avatarUpdated', handleAvatarUpdate);
 
     return () => {
       window.removeEventListener('storage', handleStorageChange);
       window.removeEventListener('profileUpdated', handleProfileUpdate);
+      window.removeEventListener('avatarUpdated', handleAvatarUpdate);
     };
   }, [user?.id]);
 

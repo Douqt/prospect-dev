@@ -33,10 +33,44 @@ export default function SettingsPage() {
   const [username, setUsername] = useState("");
   const [newUsername, setNewUsername] = useState("");
   const [mounted, setMounted] = useState(false);
+  const [unsavedAvatarUrl, setUnsavedAvatarUrl] = useState<string | null>(null);
+
+  // Cleanup truly unsaved avatars when component unmounts or user navigates away
+  const cleanupUnsavedAvatar = async (url: string | null) => {
+    if (!url) return;
+
+    try {
+      console.log('🗑️ Settings: Cleaning up unsaved avatar:', url);
+
+      // Extract file path from Supabase URL
+      const urlParts = url.split('/storage/v1/object/public/avatars/');
+      if (urlParts.length === 2) {
+        const filePath = urlParts[1];
+        const { error } = await supabase.storage
+          .from('avatars')
+          .remove([filePath]);
+
+        if (error) {
+          console.debug('Could not delete unsaved avatar:', error);
+        } else {
+          console.log('🗑️ Settings: Successfully deleted unsaved avatar');
+        }
+      }
+    } catch (error) {
+      console.debug('Error cleaning up unsaved avatar:', error);
+    }
+  };
 
   useEffect(() => {
     setMounted(true);
-  }, []);
+
+    // Cleanup on component unmount
+    return () => {
+      if (unsavedAvatarUrl) {
+        cleanupUnsavedAvatar(unsavedAvatarUrl);
+      }
+    };
+  }, [unsavedAvatarUrl]);
 
   useEffect(() => {
     loadProfile();
@@ -73,6 +107,50 @@ export default function SettingsPage() {
     }
   };
 
+  // Auto-save avatar immediately when uploaded
+  const saveAvatarOnly = async (newAvatarUrl: string) => {
+    if (!profile) return true;
+
+    try {
+      console.log("🔄 Settings: Auto-saving avatar URL:", newAvatarUrl);
+
+      const { error } = await supabase
+        .from("profiles")
+        .update({ avatar_url: newAvatarUrl })
+        .eq("id", profile.id);
+
+      console.log("🔄 Settings: Avatar auto-save result - error:", error);
+
+      if (error) {
+        console.error("Error auto-saving avatar:", error);
+        toast.error("Avatar uploaded but failed to save. Try again.");
+        // Track this avatar as unsaved for cleanup
+        setUnsavedAvatarUrl(newAvatarUrl);
+        return false;
+      }
+
+      toast.success("Avatar updated successfully!");
+      setUnsavedAvatarUrl(null); // Clear unsaved avatar (it was saved)
+
+      // Notify navbar to refresh profile data
+      try {
+        localStorage.setItem('profile_updated', Date.now().toString());
+        window.dispatchEvent(new CustomEvent('profileUpdated'));
+        console.log('🔄 Settings: Profile update event sent to navbar');
+      } catch (e) {
+        console.debug("Could not trigger profile update notification:", e);
+      }
+
+      return true;
+    } catch (error) {
+      console.error("Error auto-saving avatar:", error);
+      toast.error("Avatar uploaded but failed to save. Try again.");
+      // Track this avatar as unsaved for cleanup
+      setUnsavedAvatarUrl(newAvatarUrl);
+      return false;
+    }
+  };
+
   const handleSave = async () => {
     if (!profile) return;
     setSaving(true);
@@ -81,6 +159,8 @@ export default function SettingsPage() {
       // Also save username if it was changed
       const usernameUpdate = newUsername && newUsername !== profile.username ?
         { username: newUsername.toLowerCase() } : {};
+
+      console.log("🔄 Settings: Saving profile with avatar_url:", avatarUrl);
 
       const { error } = await supabase
         .from("profiles")
@@ -92,12 +172,14 @@ export default function SettingsPage() {
         })
         .eq("id", profile.id);
 
-      console.log("THIS IS MY AVATAR URL", avatarUrl);
+      console.log("🔄 Settings: Update result - error:", error);
+      console.log("🔄 Settings: Avatar URL being saved:", avatarUrl || profile.avatar_url || null);
 
       if (error) throw error;
 
       toast.success("Profile updated successfully");
       setNewUsername(""); // Clear the new username state
+      setUnsavedAvatarUrl(null); // Clear unsaved avatar (it was saved)
       loadProfile(); // Reload to update the current username
 
       // Notify navbar to refresh profile data
@@ -193,9 +275,16 @@ export default function SettingsPage() {
                 <h3 className="text-lg font-medium text-foreground mb-3">Avatar</h3>
                 <AvatarUpload
                   currentUrl={avatarUrl}
-                  onUpload={(url) => {
+                  onUpload={async (url) => {
+                    console.log('🔄 Settings: AvatarUpload onUpload called with URL:', url);
+
+                    // Update local state immediately for UI
                     setAvatarUrl(url);
-                    // Don't auto-save here - let user save manually
+                    console.log('🔄 Settings: avatarUrl state set to:', url);
+
+                    // Auto-save the avatar to database immediately
+                    // Cleanup tracking will happen automatically if save fails
+                    await saveAvatarOnly(url);
                   }}
                 />
               </div>
@@ -273,7 +362,7 @@ export default function SettingsPage() {
               disabled={saving}
               className="px-6 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             >
-              {saving ? "Saving..." : "Save Changes"}
+              {saving ? "Saving..." : "Save Profile"}
             </button>
           </div>
         </div>

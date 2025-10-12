@@ -55,13 +55,16 @@ export function AvatarUpload({ currentUrl, onUpload }: AvatarUploadProps) {
           .from('avatars')
           .remove([filePath]);
 
-        if (error && error.message !== 'Object not found') {
-          // Only log error if it's not "Object not found" (file might already be deleted)
-          console.debug('Could not delete old avatar:', error);
+        if (error) {
+          console.error('Failed to delete old avatar:', error);
+          // This might be due to RLS policies - log it for debugging
+          console.log('Delete error details:', error.message);
+        } else {
+          console.log('Successfully deleted old avatar');
         }
       }
     } catch (error) {
-      console.debug('Error deleting old avatar:', error);
+      console.error('Error deleting old avatar:', error);
       // Don't throw - we don't want this to block the new upload
     }
   };
@@ -114,10 +117,10 @@ export function AvatarUpload({ currentUrl, onUpload }: AvatarUploadProps) {
 
       if (!data.publicUrl) throw new Error("Failed to get public URL");
 
-      // Update local state and call onUpload callback (parent will handle DB save)
+      // Update local state and call onUpload callback (parent will handle auto-save)
       setAvatarUrl(data.publicUrl);
       onUpload?.(data.publicUrl);
-      toast.success("Avatar uploaded successfully! Save your profile to apply changes.");
+      toast.success("Uploading avatar...");
     } catch (error) {
       console.error("Avatar upload error:", error);
       toast.error("Failed to upload avatar");
