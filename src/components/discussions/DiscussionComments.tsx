@@ -80,7 +80,7 @@ export function DiscussionComments({ discussionId }: DiscussionCommentsProps) {
       const finalCommentsData = commentsWithProfiles;
 
       // Transform data to match our interface
-      return finalCommentsData.map((comment: any) => ({
+      return finalCommentsData.map((comment: { id: string; [key: string]: unknown }) => ({
         ...comment,
         _count: {
           votes: {
