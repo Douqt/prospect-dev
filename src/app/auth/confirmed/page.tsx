@@ -24,11 +24,20 @@ export default function ConfirmedPage() {
       return;
     }
 
-    /* 2. onboarding check */
+    /* 2. Verify authenticated user (security-critical) */
+    const { data: { user }, error: userErr } = await supabase.auth.getUser();
+    if (userErr || !user) {
+      console.error('user verification failed', userErr);
+      setStatus('failed');
+      setTimeout(() => redirect('/login?error=verification'), 2000);
+      return;
+    }
+
+    /* 3. onboarding check */
     const { data: profile } = await supabase
       .from('profiles')
       .select('id')
-      .eq('id', session.user.id)
+      .eq('id', user.id)
       .single();
 
     if (!profile) {

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { toast } from "sonner";
 
@@ -11,7 +11,34 @@ interface AvatarUploadProps {
 
 export function AvatarUpload({ currentUrl, onUpload }: AvatarUploadProps) {
   const [uploading, setUploading] = useState(false);
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(currentUrl || null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Fetch user's avatar on mount if not provided
+  useEffect(() => {
+    if (!avatarUrl) {
+      const fetchAvatar = async () => {
+        try {
+          const { data: { user } } = await supabase.auth.getUser();
+          if (!user) return;
+
+          const { data: profile } = await supabase
+            .from('profiles')
+            .select('avatar_url')
+            .eq('id', user.id)
+            .single();
+
+          if (profile?.avatar_url) {
+            setAvatarUrl(profile.avatar_url);
+          }
+        } catch (error) {
+          console.debug('Failed to fetch avatar:', error);
+        }
+      };
+
+      fetchAvatar();
+    }
+  }, [avatarUrl]);
 
   const handleFileSelect = () => {
     fileInputRef.current?.click();
@@ -60,17 +87,10 @@ export function AvatarUpload({ currentUrl, onUpload }: AvatarUploadProps) {
 
       if (!data.publicUrl) throw new Error("Failed to get public URL");
 
-      // Update profile with new avatar URL
-      const { error: updateError } = await supabase
-        .from("profiles")
-        .update({ avatar_url: data.publicUrl })
-        .eq("id", user.id);
-
-      if (updateError) throw updateError;
-
-      // Call onUpload callback
+      // Update local state and call onUpload callback (parent will handle DB save)
+      setAvatarUrl(data.publicUrl);
       onUpload?.(data.publicUrl);
-      toast.success("Avatar updated successfully");
+      toast.success("Avatar uploaded successfully! Save your profile to apply changes.");
     } catch (error) {
       console.error("Avatar upload error:", error);
       toast.error("Failed to upload avatar");
@@ -84,23 +104,13 @@ export function AvatarUpload({ currentUrl, onUpload }: AvatarUploadProps) {
   };
 
   const handleRemove = async () => {
-    if (!currentUrl) return;
+    if (!avatarUrl) return;
 
     try {
-      // You would need to extract the file path from the URL and delete from storage
-      // For now, just update the profile to remove the avatar
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
-
-      const { error } = await supabase
-        .from("profiles")
-        .update({ avatar_url: null })
-        .eq("id", user.id);
-
-      if (error) throw error;
-
+      // Update local state and call callback (parent will handle DB save)
+      setAvatarUrl(null);
       onUpload?.("");
-      toast.success("Avatar removed");
+      toast.success("Avatar removed! Save your profile to apply changes.");
     } catch (error) {
       console.error("Error removing avatar:", error);
       toast.error("Failed to remove avatar");
@@ -112,9 +122,9 @@ export function AvatarUpload({ currentUrl, onUpload }: AvatarUploadProps) {
       {/* Avatar Preview */}
       <div className="relative">
         <div className="w-20 h-20 rounded-full border-2 border-border overflow-hidden bg-muted">
-          {currentUrl ? (
+          {avatarUrl ? (
             <img
-              src={currentUrl}
+              src={avatarUrl}
               alt="Avatar"
               className="w-full h-full object-cover"
             />
@@ -163,7 +173,7 @@ export function AvatarUpload({ currentUrl, onUpload }: AvatarUploadProps) {
           {uploading ? "Uploading..." : "Change Avatar"}
         </button>
 
-        {currentUrl && (
+        {avatarUrl && (
           <button
             onClick={handleRemove}
             className="px-4 py-2 text-sm bg-secondary text-secondary-foreground rounded-md hover:bg-secondary/90 transition-colors"
