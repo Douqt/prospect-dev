@@ -11,7 +11,7 @@ import { Button } from "@/components/ui/button";
 import { DiscussionPost } from "@/components/discussions/DiscussionPost";
 import { useQuery } from "@tanstack/react-query";
 
-interface Discussion {
+interface DiscussionPost {
   id: string;
   title: string;
   content: string;
@@ -142,7 +142,7 @@ export default function ProfilePage() {
     return () => clearTimeout(timer);
   }, [username, userData]);
 
-  if (!userData || (userData as any).notFound) {
+  if (!userData || !!(userData as { notFound?: boolean }).notFound) {
     return (
       <div className="min-h-screen bg-background relative overflow-hidden text-foreground">
         <Sidebar />
