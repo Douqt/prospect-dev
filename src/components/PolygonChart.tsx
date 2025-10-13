@@ -88,10 +88,13 @@ export function PolygonChart({ symbol }: PolygonChartProps) {
           console.log(`Polygon.io response for ${symbol}:`, result);
 
           if (result.results && result.results.length > 0) {
-            const chartData = result.results.map((bar: any) => ({
-              timestamp: bar.t,
-              price: bar.c
-            }));
+            const chartData: ChartData[] = result.results.map((bar: unknown) => {
+              const barData = bar as { t: number; c: number };
+              return {
+                timestamp: barData.t,
+                price: barData.c
+              };
+            });
             setData(chartData);
           } else {
             // Fallback mock data if no results

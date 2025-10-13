@@ -12,9 +12,20 @@ import { BarChart3, MessageSquare, Users, TrendingUp, ArrowLeft } from "lucide-r
 import Link from "next/link";
 import { PolygonChart } from "@/components/PolygonChart";
 
+interface StockData {
+  symbol: string;
+  name: string;
+  price: string;
+  change: string;
+  changeColor: string;
+  posts: number;
+  members: string;
+  description: string;
+}
+
 // Mock stock data - in real app this would come from an API
-const getStockData = (symbol: string) => {
-  const stockData: { [key: string]: any } = {
+const getStockData = (symbol: string): StockData => {
+  const stockData = {
     nvda: {
       symbol: "NVDA",
       name: "Nvidia",
