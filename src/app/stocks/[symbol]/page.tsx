@@ -1,5 +1,6 @@
 "use client";
 import { useQuery } from "@tanstack/react-query";
+import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import Sidebar from "@/components/Sidebar";
 import Navbar from "@/components/Navbar";
@@ -105,24 +106,34 @@ interface StockPageProps {
 }
 
 export default function StockPage({ params }: StockPageProps) {
-  const stock = getStockData(params.symbol);
+  // Unwrap the params Promise - this is needed in Next.js 15
+  const [resolvedParams, setResolvedParams] = useState<{ symbol: string } | null>(null);
+
+  useEffect(() => {
+    params.then(setResolvedParams);
+  }, [params]);
+
+  const stock = resolvedParams ? getStockData(resolvedParams.symbol) : null;
 
   // Check if this stock forum exists in our database
   const { data: forumExists } = useQuery({
-    queryKey: ["forum-exists", params.symbol],
+    queryKey: ["forum-exists", resolvedParams?.symbol],
     queryFn: async () => {
+      if (!resolvedParams?.symbol) return true; // Show forum while loading
+
       const { data, error } = await supabase
         .from("discussions")
         .select("id")
-        .eq("category", params.symbol.toLowerCase())
+        .eq("category", resolvedParams.symbol.toLowerCase())
         .limit(1);
 
       if (error) return false;
       return data && data.length > 0;
-    }
+    },
+    enabled: !!resolvedParams?.symbol
   });
 
-  if (forumExists === false) {
+  if (forumExists === false && resolvedParams) {
     return (
       <div className="min-h-screen bg-background relative overflow-hidden text-foreground">
         <Sidebar />
@@ -134,7 +145,7 @@ export default function StockPage({ params }: StockPageProps) {
               <div className="text-6xl mb-4">📈</div>
               <h1 className="text-2xl font-bold mb-2">Forum Not Found</h1>
               <p className="text-muted-foreground mb-4">
-                The forum for ${params.symbol.toUpperCase()} doesn't have any discussions yet.
+                The forum for ${resolvedParams.symbol.toUpperCase()} doesn't have any discussions yet.
               </p>
               <Link href="/stocks">
                 <Button>
@@ -143,6 +154,21 @@ export default function StockPage({ params }: StockPageProps) {
                 </Button>
               </Link>
             </div>
+          </div>
+        </main>
+      </div>
+    );
+  }
+
+  if (!resolvedParams || !stock) {
+    return (
+      <div className="min-h-screen bg-background relative overflow-hidden text-foreground">
+        <Sidebar />
+        <GridBackground />
+        <Navbar />
+        <main className="relative z-10 pt-24 pl-64 pr-6">
+          <div className="h-[calc(100vh-6rem)] flex items-center justify-center">
+            <div className="text-muted-foreground">Loading forum...</div>
           </div>
         </main>
       </div>
@@ -227,7 +253,7 @@ export default function StockPage({ params }: StockPageProps) {
                 </p>
               </CardHeader>
               <CardContent className="p-0">
-                <DiscussionForum category={params.symbol.toLowerCase()} />
+                <DiscussionForum category={resolvedParams.symbol.toLowerCase()} />
               </CardContent>
             </Card>
           </div>
