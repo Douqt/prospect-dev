@@ -232,7 +232,7 @@ export default function ProfilePage() {
               </div>
             ) : userPosts && userPosts.length > 0 ? (
               <div className="space-y-4">
-                {userPosts.map((post: any) => (
+                {userPosts?.map((post: DiscussionPost) => (
                   <DiscussionPost key={post.id} discussion={post} />
                 ))}
               </div>

@@ -101,7 +101,7 @@ const getStockData = (symbol: string): StockData => {
 };
 
 interface StockPageProps {
-  params: { symbol: string };
+  params: Promise<{ symbol: string }>;
 }
 
 export default function StockPage({ params }: StockPageProps) {

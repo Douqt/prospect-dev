@@ -1,5 +1,6 @@
 "use client";
 import { useQuery } from "@tanstack/react-query";
+import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import Sidebar from "@/components/Sidebar";
 import Navbar from "@/components/Navbar";
@@ -16,20 +17,29 @@ import { DiscussionComments } from "@/components/discussions/DiscussionComments"
 import { DiscussionPost } from "@/components/discussions/DiscussionPost";
 
 interface PostPageProps {
-  params: { symbol: string; postid: string };
+  params: Promise<{ symbol: string; postid: string }>;
 }
 
 export default function PostPage({ params }: PostPageProps) {
+  // Unwrap the params Promise - this is needed in Next.js 15
+  const [resolvedParams, setResolvedParams] = useState<{ symbol: string; postid: string } | null>(null);
+
+  useEffect(() => {
+    params.then(setResolvedParams);
+  }, [params]);
+
   // Fetch the specific discussion/post
   const { data: discussion, isLoading, error } = useQuery({
-    queryKey: ["discussion", params.postid],
+    queryKey: ["discussion", resolvedParams?.postid],
     queryFn: async () => {
-      console.log("Fetching discussion:", params.postid);
+      if (!resolvedParams?.postid) return null;
+
+      console.log("Fetching discussion:", resolvedParams.postid);
 
       const { data, error } = await supabase
         .from("discussions")
         .select("id, title, content, category, created_at, upvotes, downvotes, comment_count, user_id, main_category")
-        .eq("id", params.postid)
+        .eq("id", resolvedParams.postid)
         .single();
 
       console.log("Discussion result:", data);
@@ -83,7 +93,7 @@ export default function PostPage({ params }: PostPageProps) {
               <p className="text-muted-foreground mb-4">
                 This post doesn't exist or has been removed.
               </p>
-              <Link href={`/stocks/${params.symbol}`}>
+              <Link href={`/stocks/${resolvedParams?.symbol || 'general'}`}>
                 <Button>
                   <ArrowLeft className="w-4 h-4 mr-2" />
                   Back to Forum
@@ -106,9 +116,9 @@ export default function PostPage({ params }: PostPageProps) {
         <div className="max-w-4xl mx-auto space-y-6">
 
           {/* Back Button */}
-          <Link href={`/stocks/${params.symbol}`} className="inline-flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors">
+          <Link href={`/stocks/${resolvedParams?.symbol || 'general'}`} className="inline-flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors">
             <ArrowLeft className="w-4 h-4" />
-            Back to {params.symbol.toUpperCase()} Forum
+            Back to {resolvedParams?.symbol?.toUpperCase() || 'Stocks'} Forum
           </Link>
 
           {/* Main Post Card */}
