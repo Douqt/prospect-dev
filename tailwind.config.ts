@@ -90,11 +90,19 @@ export default {
           "75%": { color: "rgb(125, 211, 252)" }, // sky-300
           "100%": { color: "rgb(56, 189, 248)" }, // sky-400
         },
+        goldCycle: {
+          "0%": { color: "rgb(252, 211, 77)" },  // yellow
+          "25%": { color: "rgb(224, 168, 21)" }, // gold
+          "50%": { color: "rgb(251, 146, 60)" }, // orange
+          "75%": { color: "rgb(224, 168, 21)" }, // gold
+          "100%": { color: "rgb(252, 211, 77)" }, // yellow
+        },
       },
       animation: {
         "accordion-down": "accordion-down 0.2s ease-out",
         "accordion-up": "accordion-up 0.2s ease-out",
         "baby-blue-cycle": "babyBlueCycle 4s linear infinite",
+        "gold-cycle": "goldCycle 4s linear infinite",
       },
       
     },

@@ -55,10 +55,21 @@ CREATE TABLE IF NOT EXISTS comment_votes (
   UNIQUE(comment_id, user_id)
 );
 
+-- Community memberships table (for joined/followed communities)
+CREATE TABLE IF NOT EXISTS community_memberships (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  community_symbol VARCHAR(20) NOT NULL, -- Stock symbol or forum identifier (NVDA, TSLA, etc.)
+  joined_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  UNIQUE(user_id, community_symbol)
+);
+
 -- Indexes for better performance
 CREATE INDEX IF NOT EXISTS idx_discussions_category ON discussions(category);
 CREATE INDEX IF NOT EXISTS idx_discussions_user_id ON discussions(user_id);
 CREATE INDEX IF NOT EXISTS idx_discussions_created_at ON discussions(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_community_memberships_user_id ON community_memberships(user_id);
+CREATE INDEX IF NOT EXISTS idx_community_memberships_community ON community_memberships(community_symbol);
 
 CREATE INDEX IF NOT EXISTS idx_comments_discussion_id ON comments(discussion_id);
 CREATE INDEX IF NOT EXISTS idx_comments_user_id ON comments(user_id);
@@ -130,6 +141,16 @@ CREATE POLICY "Users can update their own comment votes" ON comment_votes
 
 CREATE POLICY "Users can delete their own comment votes" ON comment_votes
   FOR DELETE USING (auth.uid() = user_id);
+
+-- RLS Policies for community_memberships
+CREATE POLICY "Users can view their own community memberships" ON community_memberships
+  FOR SELECT USING (auth.uid() = user_id);
+
+CREATE POLICY "Users can manage their own community memberships" ON community_memberships
+  FOR ALL USING (auth.uid() = user_id);
+
+-- Enable RLS for community memberships
+ALTER TABLE community_memberships ENABLE ROW LEVEL SECURITY;
 
 -- Functions to update vote counts and comment counts
 CREATE OR REPLACE FUNCTION update_discussion_votes()

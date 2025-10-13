@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
+import { supabase } from "../lib/supabaseClient";
 import {
   HomeIcon,
   TrophyIcon,
@@ -17,6 +18,8 @@ import {
 import { GiCrossedSwords, GiGoldBar } from "react-icons/gi";
 
 export default function Sidebar() {
+  const [user, setUser] = useState<{ email?: string } | null>(null);
+  const [profile, setProfile] = useState<{ username?: string } | null>(null);
   const [active, setActive] = useState("Dashboard");
   const [learnOpen, setLearnOpen] = useState(false);
   const [darkMode, setDarkMode] = useState(false);
@@ -39,6 +42,25 @@ export default function Sidebar() {
     });
 
     return () => observer.disconnect();
+  }, []);
+
+  // Fetch user and profile data
+  useEffect(() => {
+    const getUser = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      setUser(user);
+      if (user) {
+        const { data: profileData } = await supabase
+          .from('profiles')
+          .select('username')
+          .eq('id', user.id)
+          .single();
+        setProfile(profileData);
+      } else {
+        setProfile(null);
+      }
+    };
+    getUser();
   }, []);
 
   const ICON_SIZE = "h-4 w-4";
@@ -117,7 +139,9 @@ export default function Sidebar() {
                           ? "#"
                           : link.id === "Dashboard"
                             ? "/"
-                            : `/${toSlug(link.id)}`
+                            : link.id === "Profile"
+                              ? `/profile/${profile?.username || user?.email?.split('@')[0] || 'user'}`
+                              : `/${toSlug(link.id)}`
                       }
                       onClick={(e) => {
                         setActive(link.id);

@@ -27,7 +27,7 @@ interface Discussion {
 }
 
 interface DiscussionListProps {
-  category: "stocks" | "crypto" | "futures";
+  category: string;
 }
 
 export function DiscussionList({ category }: DiscussionListProps) {

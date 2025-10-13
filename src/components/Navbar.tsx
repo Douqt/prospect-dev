@@ -10,6 +10,7 @@ export default function NavBar() {
   const [user, setUser] = useState<{ email?: string; id?: string } | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [profile, setProfile] = useState<{
+    username?: string;
     avatar_url?: string | null;
     last_login?: string | null;
   } | null>(null);
@@ -348,7 +349,7 @@ export default function NavBar() {
                   {/* Menu Items */}
                   <div className="py-2">
                     <a
-                      href="/profile"
+                      href={`/profile/${profile?.username || user?.email?.split('@')[0] || 'user'}`}
                       className="flex items-center gap-3 px-4 py-2 text-sm transition-colors text-foreground hover:bg-muted"
                     >
                       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">

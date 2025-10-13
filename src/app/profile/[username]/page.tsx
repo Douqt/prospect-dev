@@ -46,6 +46,7 @@ export default function ProfilePage() {
     bio?: string;
     avatar_url?: string;
     created_at?: string;
+    notFound?: boolean;
   } | null>(null);
 
   // Check if viewing own profile or someone else's
@@ -118,7 +119,30 @@ export default function ProfilePage() {
   const totalUpvotes = userPosts?.reduce((sum, post) => sum + (post._count.votes.up || 0), 0) || 0;
   const totalComments = userPosts?.reduce((sum, post) => sum + (post._count.comments || 0), 0) || 0;
 
-  if (!userData) {
+  // Check if user exists after all loading is done
+  useEffect(() => {
+    // If we don't have userData, then the user doesn't exist
+    const checkUserExists = async () => {
+      if (!userData) {
+        // Try one more time to fetch the user
+        const { data: profileData } = await supabase
+          .from("profiles")
+          .select("*")
+          .eq("username", username)
+          .single();
+
+        if (!profileData) {
+          setUserData({ notFound: true }); // Custom flag to indicate user not found
+        }
+      }
+    };
+
+    // Only check after initial load attempt
+    const timer = setTimeout(checkUserExists, 500);
+    return () => clearTimeout(timer);
+  }, [username, userData]);
+
+  if (!userData || (userData as any).notFound) {
     return (
       <div className="min-h-screen bg-background relative overflow-hidden text-foreground">
         <Sidebar />
@@ -126,7 +150,13 @@ export default function ProfilePage() {
         <Navbar />
         <main className="relative z-10 pt-24 pl-64 pr-6">
           <div className="h-[calc(100vh-6rem)] flex items-center justify-center">
-            <div className="text-muted-foreground">Loading profile...</div>
+            <div className="text-center">
+              <div className="text-6xl mb-4">👤</div>
+              <h1 className="text-2xl font-bold mb-2">User Not Found</h1>
+              <p className="text-muted-foreground">
+                The user @{username} doesn't exist or has left the platform.
+              </p>
+            </div>
           </div>
         </main>
       </div>

@@ -9,7 +9,7 @@ import { CreatePostForm } from "./CreatePostForm";
 import { Plus } from "lucide-react";
 
 interface DiscussionForumProps {
-  category: "stocks" | "crypto" | "futures";
+  category: string;
 }
 
 export function DiscussionForum({ category }: DiscussionForumProps) {
@@ -18,8 +18,14 @@ export function DiscussionForum({ category }: DiscussionForumProps) {
   const categoryDisplayName = {
     stocks: "Stocks",
     crypto: "Crypto",
-    futures: "Futures"
-  }[category];
+    futures: "Futures",
+    nvda: "Nvidia",
+    amd: "AMD",
+    appl: "Apple",
+    tsla: "Tesla",
+    googl: "Alphabet",
+    msft: "Microsoft"
+  }[category.toLowerCase()] || category.toUpperCase();
 
   return (
     <div className="h-[calc(100vh-6rem)] flex flex-col gap-6 p-6">

@@ -12,7 +12,7 @@ import { Card } from "@/components/ui/card";
 import { Upload, X, Send } from "lucide-react";
 
 interface CreatePostFormProps {
-  category: "stocks" | "crypto" | "futures";
+  category: string;
   onClose: () => void;
 }
 
