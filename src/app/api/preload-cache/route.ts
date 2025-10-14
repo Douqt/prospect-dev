@@ -20,7 +20,7 @@ export async function GET(request: NextRequest) {
     console.log('🚀 Starting production cache preload for common symbols...');
 
     const startTime = Date.now();
-    const results: Record<string, any> = {};
+    const results: Record<string, unknown> = {};
     const stats = {
       redisConnected: false,
       totalSymbols: 0,

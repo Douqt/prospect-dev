@@ -8,8 +8,32 @@ import {
   yahooCache
 } from '@/lib/yahoo-cache';
 
+interface ChartDataPoint {
+  t: number;
+  c: number;
+  o?: number;
+  h?: number;
+  l?: number;
+  v?: number;
+}
+
+interface PolygonDataResponse {
+  [symbol: string]: ChartDataPoint[];
+}
+
+interface HealthCheckResponse {
+  redis: boolean;
+  yahooFinance: boolean;
+  api: boolean;
+  circuitBreaker: string;
+}
+
+interface WarmupResult {
+  [symbol: string]: ChartDataPoint[];
+}
+
 // Re-export Yahoo functions with Polygon names for easy switching
-export async function fetchPolygonData(symbol: string, timeRange: string): Promise<any[]> {
+export async function fetchPolygonData(symbol: string, timeRange: string): Promise<ChartDataPoint[]> {
   return yahooFetch(symbol, timeRange);
 }
 
@@ -17,7 +41,7 @@ export async function fetchMultiplePolygonData(
   symbols: string[],
   timeRange: string,
   batchSize?: number
-): Promise<Record<string, any[]>> {
+): Promise<PolygonDataResponse> {
   return yahooBatchFetch(symbols, timeRange);
 }
 
@@ -44,7 +68,7 @@ export const polygonCache = {
 
 // For debugging in browser console
 if (typeof window !== 'undefined') {
-  (window as any).polygonCache = polygonCache;
+  (window as unknown as Record<string, unknown>).polygonCache = polygonCache;
   console.log('🐛 Yahoo Finance temporary system active. Use window.polygonCache in console.');
   console.log('🔄 To switch back to Polygon.io: replace polygon-cache.ts with original version');
 }

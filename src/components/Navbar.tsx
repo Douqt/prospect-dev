@@ -8,6 +8,14 @@ import { Search, X } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { STOCK_FORUMS, CRYPTO_FORUMS, FUTURES_FORUMS } from "../../forum-categories";
 
+interface SearchResult {
+  type: string;
+  id: string;
+  title: string;
+  subtitle: string;
+  url: string;
+}
+
 export default function NavBar() {
   const { theme, toggleTheme } = useTheme();
   const [user, setUser] = useState<{ email?: string; id?: string } | null>(null);
@@ -21,7 +29,7 @@ export default function NavBar() {
   const [localLastLogin, setLocalLastLogin] = useState<string | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
-  const [searchResults, setSearchResults] = useState<any[]>([]);
+  const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
   const [showSearchResults, setShowSearchResults] = useState(false);
   const [isSearching, setIsSearching] = useState(false);
   const router = useRouter();

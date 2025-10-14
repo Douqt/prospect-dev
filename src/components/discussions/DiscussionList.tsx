@@ -156,13 +156,14 @@ export function DiscussionList({ category }: DiscussionListProps) {
       }
     );
 
-    if (loadMoreRef.current) {
-      observer.observe(loadMoreRef.current);
+    const refCurrent = loadMoreRef.current;
+    if (refCurrent) {
+      observer.observe(refCurrent);
     }
 
     return () => {
-      if (loadMoreRef.current) {
-        observer.unobserve(loadMoreRef.current);
+      if (refCurrent) {
+        observer.unobserve(refCurrent);
       }
     };
   }, [loadMore]);

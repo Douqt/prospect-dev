@@ -39,7 +39,7 @@ export function PolygonChart({ symbol, symbols, enableBatchLoading = false }: Po
       if (symbolData && symbolData.length > 0) {
         const chartData: ChartData[] = symbolData.map((bar) => ({
           timestamp: bar.t,
-          price: parseFloat(bar.c) || 0 // Ensure numeric values
+          price: typeof bar.c === 'string' ? parseFloat(bar.c) : bar.c || 0
         }));
         setData(chartData);
         setLastUpdate(Date.now());
@@ -60,7 +60,7 @@ export function PolygonChart({ symbol, symbols, enableBatchLoading = false }: Po
 
       const chartData: ChartData[] = rawData.map((bar) => ({
         timestamp: bar.t,
-        price: parseFloat(bar.c) || 0 // Ensure numeric values
+        price: typeof bar.c === 'string' ? parseFloat(bar.c) : (bar.c || 0)
       }));
 
       setData(chartData);
@@ -68,7 +68,6 @@ export function PolygonChart({ symbol, symbols, enableBatchLoading = false }: Po
     } catch (error) {
       console.log(`❌ Error fetching ${symbol} chart data:`, error);
       setError('Failed to load chart data');
-      generateMockData();
     }
   }, [symbol, timeRange]);
 
@@ -234,7 +233,7 @@ export function PolygonChart({ symbol, symbols, enableBatchLoading = false }: Po
             />
             <YAxis
               domain={calculateYAxisDomain()}
-              tickFormatter={(value) => `$${value.toFixed(0)}`}
+              tickFormatter={(value: number) => `$${value.toFixed(0)}`}
               axisLine={false}
               tickLine={false}
               tick={{ fontSize: 8, fill: '#6b7280' }}
@@ -243,7 +242,7 @@ export function PolygonChart({ symbol, symbols, enableBatchLoading = false }: Po
             />
             <Tooltip
               formatter={(value: number) => [formatTooltipValue(value), 'Price']}
-              labelFormatter={(timestamp) => new Date(timestamp).toLocaleDateString()}
+              labelFormatter={(timestamp): string => new Date(timestamp).toLocaleDateString()}
               contentStyle={{
                 backgroundColor: '#1f2937',
                 color: '#ffffff',

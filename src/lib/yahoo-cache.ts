@@ -1,6 +1,15 @@
 // Simple in-memory cache for Yahoo Finance using direct API calls
+interface YahooChartData {
+  t: number;
+  c: number;
+  o?: number;
+  h?: number;
+  l?: number;
+  v?: number;
+}
+
 interface CacheEntry {
-  data: any;
+  data: YahooChartData[];
   timestamp: number;
   expiresAt: number;
 }
@@ -17,7 +26,7 @@ class YahooFinanceCache {
     return YahooFinanceCache.instance;
   }
 
-  async fetchChartData(symbol: string, range: string): Promise<any[]> {
+  async fetchChartData(symbol: string, range: string): Promise<YahooChartData[]> {
     const cacheKey = `${symbol}_${range}`;
 
     // Ensure symbol is uppercase
@@ -165,16 +174,16 @@ class YahooFinanceCache {
 
 
 // Main export functions to match Polygon interface
-export async function fetchYahooChartData(symbol: string, timeRange: string): Promise<any[]> {
+export async function fetchYahooChartData(symbol: string, timeRange: string): Promise<YahooChartData[]> {
   const cache = YahooFinanceCache.getInstance();
   return cache.fetchChartData(symbol, timeRange);
 }
 
 // Batch fetch for multiple symbols (simplified)
-export async function fetchMultipleYahooChartData(symbols: string[], timeRange: string): Promise<Record<string, any[]>> {
+export async function fetchMultipleYahooChartData(symbols: string[], timeRange: string): Promise<Record<string, YahooChartData[]>> {
   console.log(`🌐 Yahoo batch fetch for ${symbols.length} symbols`);
 
-  const results: Record<string, any[]> = {};
+  const results: Record<string, YahooChartData[]> = {};
   const cache = YahooFinanceCache.getInstance();
 
   // Process sequentially to avoid rate limits

@@ -1,7 +1,14 @@
 import { LRUCache } from 'lru-cache';
 
 // In-memory cache configuration
-const cache = new LRUCache<string, any>({
+interface PolygonCacheValue {
+  data: PolygonResponse['results'];
+  timestamp: number;
+  symbol: string;
+  timeRange: string;
+}
+
+const cache = new LRUCache<string, PolygonCacheValue>({
   max: 500, // Maximum number of entries
   ttl: 60 * 1000, // 60 second TTL (adjustable)
   ttlAutopurge: true,
@@ -47,6 +54,15 @@ interface CachedResponse {
   timestamp: number;
   symbol: string;
   timeRange: string;
+}
+
+interface PolygonChartData {
+  t: number;
+  c: number;
+  o?: number;
+  h?: number;
+  l?: number;
+  v?: number;
 }
 
 class PolygonAPIManager {
@@ -197,7 +213,8 @@ class PolygonAPIManager {
       case 'max':
         timespan = 'month';
         multiplier = 1;
-        fromDate = new Date('2010-01-01');
+        const maxFromDate = new Date('2010-01-01');
+        fromDate = maxFromDate;
         break;
       default:
         fromDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
