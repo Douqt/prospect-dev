@@ -1,10 +1,13 @@
 "use client";
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { LineChart, Line, XAxis, YAxis, ResponsiveContainer, Tooltip } from 'recharts';
 import { Button } from '@/components/ui/button';
+import { fetchPolygonData, fetchMultiplePolygonData } from '@/lib/polygon-cache';
 
 interface PolygonChartProps {
   symbol: string;
+  symbols?: string[]; // For batch loading context
+  enableBatchLoading?: boolean; // Enable if part of a batch
 }
 
 interface ChartData {
@@ -14,159 +17,135 @@ interface ChartData {
 
 type TimeRange = '1h' | '24h' | '1w' | '1m' | '1y' | 'max';
 
-export function PolygonChart({ symbol }: PolygonChartProps) {
+export function PolygonChart({ symbol, symbols, enableBatchLoading = false }: PolygonChartProps) {
   const [data, setData] = useState<ChartData[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [timeRange, setTimeRange] = useState<TimeRange>('1m');
+  const [lastUpdate, setLastUpdate] = useState<number | null>(null);
 
-  useEffect(() => {
-    const fetchChartData = async () => {
-      setLoading(true);
-      try {
-        // Polygon.io API integration with real data based on time range
-        // Note: You'll need to get an API key from https://polygon.io/
-        const polygonApiKey = process.env.NEXT_PUBLIC_POLYGON_API_KEY || 'YOUR_POLYGON_API_KEY_HERE';
+  // Batch loading effect for social feed optimization
+  const fetchBatchData = useCallback(async () => {
+    if (!enableBatchLoading || !symbols || symbols.length === 0) {
+      return false;
+    }
 
-        // Calculate date range based on selected time period
-        const now = new Date();
-        let fromDate: string;
-        let multiplier = 1;
-        let timespan: string;
+    try {
+      console.log(`🔄 Batch loading ${symbols.length} symbols for social feed`);
+      const batchResults = await fetchMultiplePolygonData(symbols, timeRange);
 
-        switch (timeRange) {
-          case '1h':
-            timespan = 'minute';
-            multiplier = 60; // 1-minute bars for last hour
-            fromDate = new Date(now.getTime() - 60 * 60 * 1000).toISOString().split('T')[0];
-            break;
-          case '24h':
-            timespan = 'hour';
-            multiplier = 1; // 1-hour bars for last day
-            fromDate = new Date(now.getTime() - 24 * 60 * 60 * 1000).toISOString().split('T')[0];
-            break;
-          case '1w':
-            timespan = 'hour';
-            multiplier = 4; // 4-hour bars for last week
-            fromDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
-            break;
-          case '1m':
-            timespan = 'day';
-            multiplier = 1; // Daily bars for last month
-            fromDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
-            break;
-          case '1y':
-            timespan = 'week';
-            multiplier = 1; // Weekly bars for last year
-            fromDate = new Date(now.getTime() - 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
-            break;
-          case 'max':
-            timespan = 'month';
-            multiplier = 1; // Monthly bars since 2010
-            fromDate = '2010-01-01';
-            break;
-          default:
-            timespan = 'day';
-            multiplier = 1;
-            fromDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
-        }
-
-        const toDate = now.toISOString().split('T')[0];
-
-        console.log(`Fetching ${symbol} chart data for ${timeRange} range:`, {
-          fromDate,
-          toDate,
-          timespan,
-          multiplier
-        });
-
-        const response = await fetch(
-          `https://api.polygon.io/v2/aggs/ticker/${symbol}/range/${multiplier}/${timespan}/${fromDate}/${toDate}?apiKey=${polygonApiKey}&adjusted=true&sort=asc&limit=50000`
-        );
-
-        if (response.ok) {
-          const result = await response.json();
-          console.log(`Polygon.io response for ${symbol}:`, result);
-
-          if (result.results && result.results.length > 0) {
-            const chartData: ChartData[] = result.results.map((bar: unknown) => {
-              const barData = bar as { t: number; c: number };
-              return {
-                timestamp: barData.t,
-                price: barData.c
-              };
-            });
-            setData(chartData);
-          } else {
-            // Fallback mock data if no results
-            console.log(`No data returned from Polygon.io for ${symbol}, using mock data`);
-            generateMockData();
-          }
-        } else {
-          // Fallback mock data if API call fails
-          console.log(`Polygon.io API error for ${symbol}:`, response.status, response.statusText);
-          generateMockData();
-        }
-      } catch (error) {
-        console.log(`Error fetching ${symbol} chart data:`, error);
-        generateMockData();
+      // Find our symbol's data
+      const symbolData = batchResults[symbol];
+      if (symbolData && symbolData.length > 0) {
+        const chartData: ChartData[] = symbolData.map((bar) => ({
+          timestamp: bar.t,
+          price: parseFloat(bar.c) || 0 // Ensure numeric values
+        }));
+        setData(chartData);
+        setLastUpdate(Date.now());
+        setError(null);
+        return true;
       }
+    } catch (error) {
+      console.warn(`⚠️ Batch loading failed for ${symbol}:`, error);
+    }
+    return false;
+  }, [symbols, timeRange, symbol, enableBatchLoading]);
+
+  // Individual symbol loading (fallback)
+  const fetchIndividualData = useCallback(async () => {
+    try {
+      setError(null);
+      const rawData = await fetchPolygonData(symbol, timeRange);
+
+      const chartData: ChartData[] = rawData.map((bar) => ({
+        timestamp: bar.t,
+        price: parseFloat(bar.c) || 0 // Ensure numeric values
+      }));
+
+      setData(chartData);
+      setLastUpdate(Date.now());
+    } catch (error) {
+      console.log(`❌ Error fetching ${symbol} chart data:`, error);
+      setError('Failed to load chart data');
+      generateMockData();
+    }
+  }, [symbol, timeRange]);
+
+  // Main data fetching logic
+  useEffect(() => {
+    const fetchData = async () => {
+      setLoading(true);
+      setError(null);
+
+      // Try batch loading first if enabled
+      if (enableBatchLoading && symbols) {
+        const batchSuccess = await fetchBatchData();
+        if (batchSuccess) {
+          setLoading(false);
+          return;
+        }
+      }
+
+      // Fall back to individual loading
+      await fetchIndividualData();
       setLoading(false);
     };
 
-    const generateMockData = () => {
-      const mockData = [];
-      const basePrice = 100 + Math.random() * 900; // Random base price
-      let currentPrice = basePrice;
+    fetchData();
+  }, [symbol, timeRange, fetchBatchData, fetchIndividualData, enableBatchLoading, symbols]);
 
-      // Generate data points based on time range
-      let dataPoints = 50;
-      let timeStep = 24 * 60 * 60 * 1000; // 1 day in milliseconds
+  const generateMockData = useCallback(() => {
+    const mockData = [];
+    const basePrice = 100 + Math.random() * 900; // Random base price
+    let currentPrice = basePrice;
 
-      switch (timeRange) {
-        case '1h':
-          dataPoints = 60; // 60 minutes
-          timeStep = 60 * 1000;
-          break;
-        case '24h':
-          dataPoints = 24; // 24 hours
-          timeStep = 60 * 60 * 1000;
-          break;
-        case '1w':
-          dataPoints = 168; // 7 days * 24 hours
-          timeStep = 60 * 60 * 1000;
-          break;
-        case '1m':
-          dataPoints = 30; // ~30 days
-          timeStep = 24 * 60 * 60 * 1000;
-          break;
-        case '1y':
-          dataPoints = 52; // ~52 weeks
-          timeStep = 7 * 24 * 60 * 60 * 1000;
-          break;
-        case 'max':
-          dataPoints = 120; // ~10 years monthly
-          timeStep = 30 * 24 * 60 * 60 * 1000;
-          break;
-      }
+    // Generate data points based on time range
+    let dataPoints = 50;
+    let timeStep = 24 * 60 * 60 * 1000; // 1 day in milliseconds
 
-      for (let i = 0; i < dataPoints; i++) {
-        // Add some realistic volatility
-        const volatility = basePrice * 0.02; // 2% daily volatility
-        const change = (Math.random() - 0.5) * volatility;
-        currentPrice += change;
-        currentPrice = Math.max(currentPrice, basePrice * 0.1); // Prevent negative/extreme values
+    switch (timeRange) {
+      case '1h':
+        dataPoints = 60; // 60 minutes
+        timeStep = 60 * 1000;
+        break;
+      case '24h':
+        dataPoints = 24; // 24 hours
+        timeStep = 60 * 60 * 1000;
+        break;
+      case '1w':
+        dataPoints = 168; // 7 days * 24 hours
+        timeStep = 60 * 60 * 1000;
+        break;
+      case '1m':
+        dataPoints = 30; // ~30 days
+        timeStep = 24 * 60 * 60 * 1000;
+        break;
+      case '1y':
+        dataPoints = 52; // ~52 weeks
+        timeStep = 7 * 24 * 60 * 60 * 1000;
+        break;
+      case 'max':
+        dataPoints = 120; // ~10 years monthly
+        timeStep = 30 * 24 * 60 * 60 * 1000;
+        break;
+    }
 
-        mockData.push({
-          timestamp: Date.now() - (dataPoints - 1 - i) * timeStep,
-          price: currentPrice
-        });
-      }
+    for (let i = 0; i < dataPoints; i++) {
+      // Add some realistic volatility
+      const volatility = basePrice * 0.02; // 2% daily volatility
+      const change = (Math.random() - 0.5) * volatility;
+      currentPrice += change;
+      currentPrice = Math.max(currentPrice, basePrice * 0.1); // Prevent negative/extreme values
 
-      setData(mockData);
-    };
+      mockData.push({
+        timestamp: Date.now() - (dataPoints - 1 - i) * timeStep,
+        price: currentPrice
+      });
+    }
 
-    fetchChartData();
-  }, [symbol, timeRange]);
+    setData(mockData);
+  }, [timeRange]);
 
   if (loading) {
     return (
@@ -175,6 +154,31 @@ export function PolygonChart({ symbol }: PolygonChartProps) {
       </div>
     );
   }
+
+  // Debug logging for data inspection
+  console.log(`📊 Chart data for ${symbol}:`, data);
+  console.log(`📈 Price range: ${data.length > 0 ? Math.min(...data.map(d => d.price)) : 'N/A'} - ${data.length > 0 ? Math.max(...data.map(d => d.price)) : 'N/A'}`);
+
+  // Calculate dynamic Y-axis domain for better scaling
+  const calculateYAxisDomain = () => {
+    if (data.length === 0) return ['auto', 'auto'];
+
+    const prices = data.map(d => d.price).filter(p => p != null && !isNaN(p));
+    if (prices.length === 0) return ['auto', 'auto'];
+
+    const min = Math.min(...prices);
+    const max = Math.max(...prices);
+    const range = max - min;
+
+    // If range is very small, create artificial buffer
+    if (range < 0.01) {
+      const center = (min + max) / 2;
+      return [center - 1, center + 1];
+    }
+
+    // Otherwise use small buffer
+    return [min - range * 0.1, max + range * 0.1];
+  };
 
   const formatTooltipValue = (value: number) => `$${value.toFixed(2)}`;
   const formatXAxisLabel = (timestamp: number) =>
@@ -198,7 +202,10 @@ export function PolygonChart({ symbol }: PolygonChartProps) {
             key={value}
             variant={timeRange === value ? "default" : "ghost"}
             size="sm"
-            onClick={() => setTimeRange(value)}
+            onClick={(e) => {
+              e.stopPropagation();
+              setTimeRange(value);
+            }}
             className={`flex-1 text-xs font-medium py-0.5 px-1 ${
               timeRange === value
                 ? 'bg-[#e0a815] hover:bg-[#f2c74b] text-black'
@@ -210,26 +217,34 @@ export function PolygonChart({ symbol }: PolygonChartProps) {
         ))}
       </div>
 
-      {/* Chart - Fill remaining space */}
-      <div className="flex-1 bg-gradient-to-br from-[#e0a815]/5 to-[#f2c74b]/5 rounded-lg p-1 border border-[#e0a815]/20 min-h-0">
+      {/* Error display for production debugging */}
+      {error && (
+        <div className="text-xs text-red-600 text-center py-1 bg-red-50 rounded flex-shrink-0">
+          {error}
+        </div>
+      )}
+
+      {/* Chart - Compact but readable */}
+      <div className="flex-1 bg-gradient-to-br from-[#e0a815]/5 to-[#f2c74b]/5 rounded-lg p-1 border border-[#e0a815]/20" style={{ height: 180 }}>
         <ResponsiveContainer width="100%" height="100%">
-          <LineChart data={data} margin={{ top: 5, right: 10, left: 5, bottom: 5 }}>
+          <LineChart data={data} margin={{ top: 10, right: 20, left: 0, bottom: 10 }}>
             <XAxis
               dataKey="timestamp"
               tickFormatter={formatXAxisLabel}
               axisLine={false}
               tickLine={false}
               tick={{ fontSize: 8, fill: '#6b7280' }}
-              height={20}
+              height={15}
               interval="preserveStartEnd"
             />
             <YAxis
-              domain={['dataMin - 5', 'dataMax + 5']}
+              domain={calculateYAxisDomain()}
               tickFormatter={(value) => `$${value.toFixed(0)}`}
               axisLine={false}
               tickLine={false}
               tick={{ fontSize: 8, fill: '#6b7280' }}
-              width={28}
+              width={30}
+              stroke="#6b7280"
             />
             <Tooltip
               formatter={(value: number) => [formatTooltipValue(value), 'Price']}
@@ -248,19 +263,21 @@ export function PolygonChart({ symbol }: PolygonChartProps) {
               type="monotone"
               dataKey="price"
               stroke="#e0a815"
-              strokeWidth={1.5}
+              strokeWidth={2.5}
               dot={false}
-              activeDot={{ r: 2, fill: '#e0a815' }}
+              activeDot={{ r: 3, fill: '#e0a815' }}
             />
           </LineChart>
         </ResponsiveContainer>
       </div>
 
       {/* Price Stats - smaller and fixed height */}
-      <div className="grid grid-cols-2 gap-1 text-center flex-shrink-0 min-h-0">
+      <div className="grid grid-cols-2 gap-1 text-center flex-shrink-0">
         <div className="space-y-0 py-1">
           <div className="text-xs font-bold text-[#e0a815] leading-tight">
-            ${data[data.length - 1]?.price.toFixed(2) || 'N/A'}
+            {data?.length > 0 && data[data.length - 1]?.price != null
+              ? `$${data[data.length - 1].price.toFixed(2)}`
+              : 'N/A'}
           </div>
           <div className="text-xs text-muted-foreground leading-tight">Price</div>
         </div>

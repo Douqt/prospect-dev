@@ -6,12 +6,14 @@ import Sidebar from "@/components/Sidebar";
 import Navbar from "@/components/Navbar";
 import { GridBackground } from "@/components/GridBackground";
 import { DiscussionForum } from "@/components/discussions/DiscussionForum";
+import { DiscussionList } from "@/components/discussions/DiscussionList";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { BarChart3, MessageSquare, Users, TrendingUp, ArrowLeft } from "lucide-react";
 import Link from "next/link";
-import { PolygonChart } from "@/components/PolygonChart";
+import { PolygonChartDynamic } from "@/components/PolygonChartDynamic";
+import FollowForumButton from "@/components/FollowForumButton";
 
 interface StockData {
   symbol: string;
@@ -24,80 +26,13 @@ interface StockData {
   description: string;
 }
 
-// Mock stock data - in real app this would come from an API
-const getStockData = (symbol: string): StockData => {
-  const stockData = {
-    nvda: {
-      symbol: "NVDA",
-      name: "Nvidia",
-      price: "$1,234.56",
-      change: "+12.34%",
-      changeColor: "text-green-600",
-      posts: 1247,
-      members: "2.1M",
-      description: "World leader in graphics processing units and AI computing"
-    },
-    amd: {
-      symbol: "AMD",
-      name: "Advanced Micro Devices",
-      price: "$234.56",
-      change: "-2.34%",
-      changeColor: "text-red-600",
-      posts: 892,
-      members: "987K",
-      description: "Semiconductor company specializing in computer processors and graphics processors"
-    },
-    appl: {
-      symbol: "AAPL",
-      name: "Apple Inc",
-      price: "$195.43",
-      change: "+0.87%",
-      changeColor: "text-green-600",
-      posts: 2156,
-      members: "3.2M",
-      description: "Technology company that designs, manufactures, and markets smartphones, personal computers, tablets, wearables, and accessories"
-    },
-    tsla: {
-      symbol: "TSLA",
-      name: "Tesla Inc",
-      price: "$789.01",
-      change: "-5.67%",
-      changeColor: "text-red-600",
-      posts: 3241,
-      members: "4.1M",
-      description: "Electric vehicle and clean energy company"
-    },
-    googl: {
-      symbol: "GOOGL",
-      name: "Alphabet Inc",
-      price: "$2,890.12",
-      change: "+1.23%",
-      changeColor: "text-green-600",
-      posts: 1876,
-      members: "2.8M",
-      description: "Parent company of Google and other subsidiaries"
-    },
-    msft: {
-      symbol: "MSFT",
-      name: "Microsoft",
-      price: "$456.78",
-      change: "+3.45%",
-      changeColor: "text-green-600",
-      posts: 2893,
-      members: "3.5M",
-      description: "Technology corporation that produces computer software, consumer electronics, personal computers, and related services"
-    }
-  };
-
-  return stockData[symbol.toLowerCase()] || {
-    symbol: symbol.toUpperCase(),
-    name: symbol.toUpperCase(),
-    price: "N/A",
-    change: "N/A",
-    changeColor: "text-gray-600",
-    posts: 0,
-    members: "1",
-    description: `Discussions about ${symbol.toUpperCase()}`
+// Basic stock metadata - only for display purposes when stats are loading
+const getStockMetadata = (symbol: string) => {
+  const upperSymbol = symbol.toUpperCase();
+  return {
+    symbol: upperSymbol,
+    name: upperSymbol, // Will be updated with real data when available
+    description: `Discussions about ${upperSymbol}`
   };
 };
 
@@ -113,7 +48,19 @@ export default function StockPage({ params }: StockPageProps) {
     params.then(setResolvedParams);
   }, [params]);
 
-  const stock = resolvedParams ? getStockData(resolvedParams.symbol) : null;
+  const metadata = resolvedParams ? getStockMetadata(resolvedParams.symbol) : null;
+
+  // Default stock data with loading states for real-time data
+  const fallbackStock: StockData = {
+    symbol: metadata?.symbol || '',
+    name: metadata?.name || '',
+    price: "Loading...",
+    change: "Loading...",
+    changeColor: "text-gray-600",
+    posts: 0,
+    members: "Loading...",
+    description: metadata?.description || ''
+  };
 
   // Check if this stock forum exists in our database
   const { data: forumExists } = useQuery({
@@ -132,6 +79,37 @@ export default function StockPage({ params }: StockPageProps) {
     },
     enabled: !!resolvedParams?.symbol
   });
+
+  // Fetch real-time forum stats
+  const { data: forumStats, isLoading: statsLoading } = useQuery({
+    queryKey: ["forum-stats", resolvedParams?.symbol],
+    queryFn: async () => {
+      if (!resolvedParams?.symbol) return null;
+
+      try {
+        const response = await fetch(`/api/forum-stats?symbol=${resolvedParams.symbol.toUpperCase()}`);
+        const data = await response.json();
+
+        return data;
+      } catch (error) {
+        console.warn('Failed to fetch forum stats, using fallback:', error);
+        // Fallback to basic stats if API fails
+        return {
+          price: "N/A",
+          change: "N/A",
+          changeColor: "text-gray-600",
+          posts: 0,
+          members: "0"
+        };
+      }
+    },
+    enabled: !!resolvedParams?.symbol,
+    refetchInterval: 5 * 60 * 1000, // Refetch every 5 minutes
+    refetchOnWindowFocus: false,
+  });
+
+  // Use real stats if available, otherwise show loading
+  const displayStock = forumStats ? { ...fallbackStock, ...forumStats } : fallbackStock;
 
   if (forumExists === false && resolvedParams) {
     return (
@@ -160,7 +138,7 @@ export default function StockPage({ params }: StockPageProps) {
     );
   }
 
-  if (!resolvedParams || !stock) {
+  if (!resolvedParams) {
     return (
       <div className="min-h-screen bg-background relative overflow-hidden text-foreground">
         <Sidebar />
@@ -198,9 +176,9 @@ export default function StockPage({ params }: StockPageProps) {
                   <BarChart3 className="h-8 w-8 text-[#e0a815]" />
                 </div>
                 <div className="space-y-1">
-                  <h1 className="text-4xl font-bold">{stock.symbol}</h1>
-                  <p className="text-muted-foreground text-lg">{stock.name}</p>
-                  <p className="text-muted-foreground">{stock.description}</p>
+                  <h1 className="text-4xl font-bold">{displayStock.symbol}</h1>
+                  <p className="text-muted-foreground text-lg">{displayStock.name}</p>
+                  <p className="text-muted-foreground">{displayStock.description}</p>
                 </div>
               </div>
 
@@ -208,74 +186,79 @@ export default function StockPage({ params }: StockPageProps) {
               <div className="grid grid-cols-4 gap-4">
                 <Card>
                   <CardContent className="p-4 text-center">
-                    <div className="text-2xl font-bold text-[#e0a815]">{stock.price}</div>
+                    <div className="text-2xl font-bold text-[#e0a815]">{displayStock.price}</div>
                     <div className="text-xs text-muted-foreground">Current Price</div>
                   </CardContent>
                 </Card>
                 <Card>
                   <CardContent className="p-4 text-center">
-                    <div className={`text-2xl font-bold ${stock.changeColor}`}>{stock.change}</div>
+                    <div className={`text-2xl font-bold ${displayStock.changeColor}`}>{displayStock.change}</div>
                     <div className="text-xs text-muted-foreground">Change</div>
                   </CardContent>
                 </Card>
                 <Card>
                   <CardContent className="p-4 text-center">
-                    <div className="text-2xl font-bold">{stock.posts.toLocaleString()}</div>
+                    <div className="text-2xl font-bold">{displayStock.posts.toLocaleString()}</div>
                     <div className="text-xs text-muted-foreground">Posts</div>
                   </CardContent>
                 </Card>
                 <Card>
                   <CardContent className="p-4 text-center">
-                    <div className="text-2xl font-bold">{stock.members}</div>
+                    <div className="text-2xl font-bold">{displayStock.members}</div>
                     <div className="text-xs text-muted-foreground">Members</div>
                   </CardContent>
                 </Card>
               </div>
             </div>
 
-            {/* Join Forum Button */}
-            <div className="mb-6">
-              <Button size="lg" className="bg-[#e0a815] hover:bg-[#f2c74b] text-black">
-                Join {stock.symbol} Forum
-              </Button>
-            </div>
+
+
+            {/* Follow Forum Button */}
+            <FollowForumButton stockSymbol={resolvedParams.symbol.toLowerCase()} />
 
             {/* Discussion Section */}
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2 text-2xl">
                   <MessageSquare className="h-6 w-6 text-[#e0a815]" />
-                  {stock.symbol} Discussions
+                  {displayStock.symbol} Discussions
                   <Badge variant="secondary" className="ml-2">Forum Activity</Badge>
                 </CardTitle>
                 <p className="text-muted-foreground">
-                  Join fellow traders discussing {stock.name}
+                  Join fellow traders discussing {displayStock.name}
                 </p>
               </CardHeader>
               <CardContent className="p-0">
                 <DiscussionForum category={resolvedParams.symbol.toLowerCase()} />
               </CardContent>
             </Card>
+
+            {/* Infinite scroll container that allows full page scrolling */}
+            <div className="pt-6">
+              <DiscussionList category={resolvedParams.symbol.toLowerCase()} />
+            </div>
           </div>
         </main>
 
-        {/* Stock Chart Sidebar - Right Side */}
-        <aside className="w-96 bg-card border-l border-border min-h-screen p-6 overflow-y-auto">
-          <div className="sticky top-6 space-y-6">
-            {/* Stock Chart Card */}
+        {/* Chart and Stats Sidebar - Right Side */}
+        <aside className="w-80 pt-24 bg-transparent min-h-screen p-6 overflow-y-auto">
+          <div className="space-y-6">
+            {/* Stock Chart - Top of sidebar */}
             <Card>
               <CardHeader>
                 <CardTitle className="text-lg flex items-center gap-2">
                   <BarChart3 className="h-5 w-5 text-[#e0a815]" />
-                  {stock.symbol} Chart
+                  {displayStock.symbol} Chart
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <PolygonChart symbol={stock.symbol} />
+                <div className="h-64 w-full">
+                  <PolygonChartDynamic symbol={resolvedParams.symbol} />
+                </div>
               </CardContent>
             </Card>
 
-            {/* Quick Stats */}
+            {/* Key Statistics */}
             <Card>
               <CardHeader>
                 <CardTitle className="text-lg">Key Statistics</CardTitle>

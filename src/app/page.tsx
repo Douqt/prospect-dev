@@ -23,6 +23,7 @@ interface Discussion {
   upvotes: number;
   downvotes: number;
   comment_count: number;
+  image_url?: string;
   profiles: {
     username?: string;
     display_name?: string;
@@ -37,34 +38,34 @@ const topCommunities = [
   {
     symbol: "TSLA",
     name: "Tesla Inc",
-    members: "4.1M",
-    posts: "3,241",
-    change: "+5.67%",
-    changeColor: "text-green-600"
+    members: "0", // Will be updated with real data
+    posts: "0", // Will be updated with real data
+    change: "0%", // Will be updated with real data
+    changeColor: "text-gray-600"
   },
   {
     symbol: "NVDA",
     name: "Nvidia",
-    members: "2.1M",
-    posts: "1,247",
-    change: "+12.34%",
-    changeColor: "text-green-600"
+    members: "0",
+    posts: "0",
+    change: "0%",
+    changeColor: "text-gray-600"
   },
   {
     symbol: "AAPL",
     name: "Apple Inc",
-    members: "3.2M",
-    posts: "2,156",
-    change: "+0.87%",
-    changeColor: "text-green-600"
+    members: "0",
+    posts: "0",
+    change: "0%",
+    changeColor: "text-gray-600"
   },
   {
     symbol: "MSFT",
     name: "Microsoft",
-    members: "3.5M",
-    posts: "2,893",
-    change: "+3.45%",
-    changeColor: "text-green-600"
+    members: "0",
+    posts: "0",
+    change: "0%",
+    changeColor: "text-gray-600"
   }
 ];
 
@@ -111,31 +112,31 @@ export default function HomePage() {
       const { data: { user } } = await supabase.auth.getUser();
 
       if (feedType === 'following' && user) {
-        // For "Following" feed: only show posts from followed users
-        // First get users the current user is following
+        // For "Following" feed: show posts from followed forums (users following the forum)
+        // First get forums the current user is following
         const { data: followingData, error: followError } = await supabase
-          .from("follows")
-          .select("followed_user_id")
-          .eq("follower_user_id", user.id);
+          .from("community_memberships")
+          .select("community_symbol")
+          .eq("user_id", user.id);
 
         if (followError) {
-          console.error("Error fetching following data:", followError);
+          console.error("Error fetching forum following data:", followError);
           // Return empty array if following data can't be fetched
           return [];
         }
 
-        const followedUserIds = followingData?.map(f => f.followed_user_id) || [];
+        const followedForums = followingData?.map(f => f.community_symbol.toLowerCase()) || [];
 
-        if (followedUserIds.length === 0) {
-          // If user follows no one, return empty array
+        if (followedForums.length === 0) {
+          // If user follows no forums, return empty array
           return [];
         }
 
-        // Fetch discussions only from followed users
+        // Fetch discussions only from followed forums - don't limit main category
         const { data, error } = await supabase
           .from("discussions")
-          .select("id, title, content, category, created_at, upvotes, downvotes, comment_count, user_id")
-          .in("user_id", followedUserIds)
+          .select("id, title, content, category, created_at, upvotes, downvotes, comment_count, user_id, image_url")
+          .in("category", followedForums)
           .order("created_at", { ascending: false })
           .limit(20);
 
@@ -169,7 +170,7 @@ export default function HomePage() {
         // For "For You" feed: show all discussions
         const { data, error } = await supabase
           .from("discussions")
-          .select("id, title, content, category, created_at, upvotes, downvotes, comment_count, user_id")
+          .select("id, title, content, category, created_at, upvotes, downvotes, comment_count, user_id, image_url")
           .order("created_at", { ascending: false })
           .limit(20);
 
@@ -316,13 +317,17 @@ export default function HomePage() {
           )}
 
           {/* Social Feed Posts */}
-          <div className="space-y-6">
+          <div className="border border-[#e0a815]/50 rounded-lg overflow-hidden">
             {isLoading ? (
-              <div className="flex items-center justify-center h-32">
-                <div className="text-muted-foreground">Loading trading feed...</div>
-              </div>
+              <Card className="text-center py-12 border-0 rounded-none">
+                <CardContent>
+                  <div className="mb-4">
+                    <div className="text-muted-foreground">Loading trading feed...</div>
+                  </div>
+                </CardContent>
+              </Card>
             ) : filteredDiscussions.length === 0 ? (
-              <Card className="text-center py-12">
+              <Card className="text-center py-12 border-0 rounded-none">
                 <CardContent>
                   <div className="mb-4">
                     <Search className="h-16 w-16 text-muted-foreground mx-auto mb-4" />
@@ -333,7 +338,7 @@ export default function HomePage() {
                       {searchQuery
                         ? "Try adjusting your search terms"
                         : feedType === 'following'
-                        ? "Start following traders to see their posts here"
+                        ? "Start following forums to see their discussions here"
                         : "Be the first to post in our trading community"
                       }
                     </p>
@@ -342,52 +347,86 @@ export default function HomePage() {
               </Card>
             ) : (
               filteredDiscussions.map((discussion, index) => (
-                <Link key={discussion.id} href={`/stocks/${discussion.category.toLowerCase()}/${discussion.id}`}>
-                  <Card className="border hover:shadow-lg transition-shadow cursor-pointer">
+                <div key={discussion.id}>
+                  <Card className={`border-0 hover:shadow-md transition-all duration-200 border-b border-[#e0a815]/10 ${
+                    index === 0 ? 'rounded-t-lg' :
+                    index === filteredDiscussions.length - 1 ? 'rounded-b-lg' : 'rounded-none'
+                  }`}>
                     <CardContent className="p-6">
-                        {/* Social Post Layout */}
-                        <div className="flex gap-6">
+                      {/* Social Post Layout */}
+                      <div className="flex gap-6">
                         {/* Post Content - Left Side */}
                         <div className="flex-1">
                           {/* User Info */}
                           <div className="flex items-center gap-3 mb-3">
-                            <div className="w-10 h-10 rounded-full overflow-hidden flex items-center justify-center bg-gradient-to-br from-blue-500 to-purple-600">
-                              {discussion.profiles?.avatar_url ? (
-                                <img
-                                  src={discussion.profiles.avatar_url}
-                                  alt={`${discussion.profiles.display_name || discussion.profiles.username || 'Trader'} avatar`}
-                                  className="w-full h-full object-cover"
-                                />
-                              ) : (
-                                <span className="text-white text-sm font-semibold">
-                                  {discussion.profiles?.display_name?.charAt(0)?.toUpperCase() ||
-                                   discussion.profiles?.username?.charAt(0)?.toUpperCase() ||
-                                   'T'}
-                                </span>
-                              )}
-                            </div>
+                            <Link href={`/profile/${discussion.profiles?.username || ''}`}>
+                              <div className="w-10 h-10 rounded-full overflow-hidden flex items-center justify-center bg-gradient-to-br from-blue-500 to-purple-600 cursor-pointer hover:opacity-80 transition-opacity">
+                                {discussion.profiles?.avatar_url ? (
+                                  <img
+                                    src={discussion.profiles.avatar_url}
+                                    alt={(discussion.profiles?.display_name || discussion.profiles?.username || 'Trader') + ' avatar'}
+                                    className="w-full h-full object-cover"
+                                  />
+                                ) : (
+                                  <span className="text-white text-sm font-semibold">
+                                    {discussion.profiles?.display_name?.charAt(0)?.toUpperCase() ??
+                                     discussion.profiles?.username?.charAt(0)?.toUpperCase() ??
+                                     'T'}
+                                  </span>
+                                )}
+                              </div>
+                            </Link>
                             <div>
-                              <p className="font-semibold text-sm">
-                                {discussion.profiles?.display_name || discussion.profiles?.username || 'Trader'}
-                              </p>
-                              <Badge variant="outline" className="text-xs">
-                                <Link href={`/stocks/${discussion.category.toLowerCase()}`}>
-                                  {discussion.category.toUpperCase()} Trader
-                                </Link>
-                              </Badge>
+                              <Link href={`/profile/${discussion.profiles?.username || ''}`}>
+                                <p className="font-semibold text-sm cursor-pointer hover:text-[#e0a815] transition-colors">
+                                  {discussion.profiles?.display_name ?? discussion.profiles?.username ?? 'Trader'}
+                                </p>
+                              </Link>
+                              <span
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  window.location.href = `/stocks/${discussion.category.toLowerCase()}`;
+                                }}
+                                className="cursor-pointer text-xs px-2 py-1 bg-muted rounded-md hover:bg-muted/80 transition-colors"
+                              >
+                                {discussion.category.toUpperCase()} Trader
+                              </span>
                             </div>
                           </div>
 
                           {/* Post Content */}
                           <div className="mb-4">
-                            <h3 className="font-semibold text-lg mb-2 hover:text-[#e0a815] transition-colors cursor-pointer">
-                              <Link href={`/stocks/${discussion.category.toLowerCase()}`}>
+                            <Link href={`/stocks/${discussion.category.toLowerCase()}/${discussion.id}`}>
+                              <h3 className="font-semibold text-lg mb-2 hover:text-[#e0a815] transition-colors cursor-pointer">
                                 {discussion.title}
-                              </Link>
-                            </h3>
-                            <p className="text-muted-foreground mb-3">
-                              {discussion.content}
-                            </p>
+                              </h3>
+                            </Link>
+                            <div className="text-muted-foreground mb-3">
+                              {/* Render image if image_url exists */}
+                              {discussion.image_url && (
+                                <div className="mb-3">
+                                  <img
+                                    src={discussion.image_url}
+                                    alt="Post image"
+                                    className="rounded-lg max-w-full h-auto max-h-96 object-cover border border-gray-200"
+                                    onLoad={() => console.log('✅ Image loaded successfully:', discussion.image_url)}
+                                    onError={(e) => {
+                                      console.log('❌ Image failed to load:', discussion.image_url);
+                                      e.currentTarget.style.display = 'none';
+                                    }}
+                                  />
+                                </div>
+                              )}
+
+                              {/* Render text content */}
+                              {discussion.content.split('\n').map((paragraph, index) => (
+                                paragraph.trim() ? (
+                                  <p key={index} className="mb-2 last:mb-0">
+                                    {paragraph}
+                                  </p>
+                                ) : null
+                              ))}
+                            </div>
                           </div>
 
                           {/* Engagement Stats */}
@@ -416,7 +455,9 @@ export default function HomePage() {
                             </div>
                             <div className="h-40 overflow-hidden">
                               <PolygonChart
-                                symbol={discussion.category}
+                                symbol={discussion.category.toUpperCase()}
+                                symbols={filteredDiscussions.map(d => d.category.toUpperCase())}
+                                enableBatchLoading={true}
                               />
                             </div>
                           </Card>
@@ -424,10 +465,25 @@ export default function HomePage() {
                       </div>
                     </CardContent>
                   </Card>
-                </Link>
+                </div>
               ))
-            )}
+            )}   
           </div>
+          {/* End of feed message */}
+
+          {!isLoading && filteredDiscussions.length > 0 && (
+            <div className="text-center py-6 px-4">
+              <div className="inline-flex items-center gap-2 bg-muted/30 px-4 py-2 rounded-full border border-[#e0a815]/50">
+                <div className="w-1 h-1 bg-[#e0a815] rounded-full"></div>
+                <p className="text-muted-foreground text-xs">You've reached the end of the feed</p>
+                <div className="w-1 h-1 bg-[#e0a815] rounded-full"></div>
+              </div>
+            </div>
+          )}
+
+          {/* Add bottom spacing */}
+
+          <div className="h-16"></div>
         </div>
       </main>
     </div>

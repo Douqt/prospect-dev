@@ -28,8 +28,8 @@ export function DiscussionForum({ category }: DiscussionForumProps) {
   }[category.toLowerCase()] || category.toUpperCase();
 
   return (
-    <div className="h-[calc(100vh-6rem)] flex flex-col gap-6 p-6">
-      <div className="flex items-center justify-between">
+    <div className="p-6">
+      <div className="flex items-center justify-between mb-6">
         <h1 className="text-3xl font-bold">{categoryDisplayName} Discussions</h1>
         <Dialog open={newPostDialogOpen} onOpenChange={setNewPostDialogOpen}>
           <DialogTrigger asChild>
@@ -46,10 +46,6 @@ export function DiscussionForum({ category }: DiscussionForumProps) {
           </DialogContent>
         </Dialog>
       </div>
-
-      <Card className="flex-1 p-6">
-        <DiscussionList category={category} />
-      </Card>
     </div>
   );
 }

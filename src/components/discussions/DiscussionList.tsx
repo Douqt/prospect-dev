@@ -1,6 +1,7 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { DiscussionPost } from "./DiscussionPost";
 
@@ -31,19 +32,26 @@ interface DiscussionListProps {
 }
 
 export function DiscussionList({ category }: DiscussionListProps) {
-  const { data: discussions, isLoading, error } = useQuery({
-    queryKey: ["discussions", category],
+  const [offset, setOffset] = useState(0);
+  const [allDiscussions, setAllDiscussions] = useState<Discussion[]>([]);
+  const [hasMore, setHasMore] = useState(true);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const loadMoreRef = useRef<HTMLDivElement>(null);
+
+  // Initial query for first load
+  const { data: initialDiscussions, isLoading, error } = useQuery({
+    queryKey: ["discussions", category, "initial"],
     queryFn: async () => {
-      // First get discussions
       const { data: discussionsData, error: discussionsError } = await supabase
         .from("discussions")
         .select("id, title, content, user_id, image_url, category, created_at, upvotes, downvotes, comment_count")
         .eq("category", category)
-        .order("created_at", { ascending: false });
+        .order("created_at", { ascending: false })
+        .limit(20);
 
       if (discussionsError) throw discussionsError;
 
-      // Then get profiles separately
+      // Get profiles separately
       const discussionsWithProfiles = await Promise.all(
         discussionsData.map(async (discussion) => {
           const { data: profile } = await supabase
@@ -59,10 +67,8 @@ export function DiscussionList({ category }: DiscussionListProps) {
         })
       );
 
-      const finalDiscussionsData = discussionsWithProfiles;
-
       // Transform data to match our interface
-      return finalDiscussionsData.map((discussion: { id: string; [key: string]: unknown }) => ({
+      return discussionsWithProfiles.map((discussion) => ({
         ...discussion,
         _count: {
           comments: discussion.comment_count,
@@ -74,6 +80,106 @@ export function DiscussionList({ category }: DiscussionListProps) {
       })) as Discussion[];
     }
   });
+
+  // Load more function for infinite scroll
+  const loadMore = useCallback(async () => {
+    if (isLoadingMore || !hasMore) return;
+
+    setIsLoadingMore(true);
+
+    try {
+      const newOffset = offset + 20;
+      const { data: moreDiscussions, error: loadError } = await supabase
+        .from("discussions")
+        .select("id, title, content, user_id, image_url, category, created_at, upvotes, downvotes, comment_count")
+        .eq("category", category)
+        .order("created_at", { ascending: false })
+        .range(newOffset, newOffset + 19);
+
+      if (loadError) throw loadError;
+
+      if (moreDiscussions.length < 20) {
+        setHasMore(false);
+      }
+
+      if (moreDiscussions.length > 0) {
+        // Get profiles for new discussions
+        const moreWithProfiles = await Promise.all(
+          moreDiscussions.map(async (discussion) => {
+            const { data: profile } = await supabase
+              .from("profiles")
+              .select("username, display_name, avatar_url")
+              .eq("id", discussion.user_id)
+              .single();
+
+            return {
+              ...discussion,
+              profiles: profile || { username: null, display_name: null, avatar_url: null }
+            };
+          })
+        );
+
+        const transformedMoreDiscussions = moreWithProfiles.map((discussion) => ({
+          ...discussion,
+          _count: {
+            comments: discussion.comment_count,
+            votes: {
+              up: discussion.upvotes,
+              down: discussion.downvotes
+            }
+          }
+        })) as Discussion[];
+
+        setAllDiscussions(prev => [...prev, ...transformedMoreDiscussions]);
+        setOffset(newOffset);
+      }
+    } catch (error) {
+      console.error("Error loading more discussions:", error);
+    } finally {
+      setIsLoadingMore(false);
+    }
+  }, [category, offset, isLoadingMore, hasMore]);
+
+  // Intersection observer for infinite scroll
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const target = entries[0];
+        if (target.isIntersecting) {
+          loadMore();
+        }
+      },
+      {
+        root: null,
+        rootMargin: '100px',
+        threshold: 0.1
+      }
+    );
+
+    if (loadMoreRef.current) {
+      observer.observe(loadMoreRef.current);
+    }
+
+    return () => {
+      if (loadMoreRef.current) {
+        observer.unobserve(loadMoreRef.current);
+      }
+    };
+  }, [loadMore]);
+
+  // Update allDiscussions when initial data loads
+  useEffect(() => {
+    if (initialDiscussions) {
+      setAllDiscussions(initialDiscussions);
+      setOffset(0); // Reset offset
+      setHasMore(true); // Allow loading more
+
+      // Check if initial load already has less than limit
+      if (initialDiscussions.length < 20) {
+        setHasMore(false);
+      }
+    }
+  }, [initialDiscussions]);
 
   if (isLoading) {
     return (
@@ -98,7 +204,7 @@ export function DiscussionList({ category }: DiscussionListProps) {
     );
   }
 
-  if (!discussions || discussions.length === 0) {
+  if (!allDiscussions || allDiscussions.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center h-32 space-y-4">
         <div className="text-muted-foreground text-center">
@@ -112,10 +218,42 @@ export function DiscussionList({ category }: DiscussionListProps) {
   }
 
   return (
-    <div className="space-y-4">
-      {discussions.map((discussion) => (
-        <DiscussionPost key={discussion.id} discussion={discussion} />
+    <div>
+      {allDiscussions.map((discussion, index) => (
+        <div key={discussion.id}>
+          <DiscussionPost discussion={discussion} />
+          {index < allDiscussions.length - 1 && (
+            <div className="border-t border-[#e0a815]/20"></div>
+          )}
+        </div>
       ))}
+
+      {/* Load more trigger element */}
+      {hasMore && (
+        <div
+          ref={loadMoreRef}
+          className="flex items-center justify-center py-8"
+        >
+          {isLoadingMore ? (
+            <div className="flex items-center space-x-2 text-muted-foreground">
+              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-[#e0a815]"></div>
+              <span>Loading more discussions...</span>
+            </div>
+          ) : (
+            <div className="text-muted-foreground text-sm">
+              Scroll down to load more posts...
+            </div>
+          )}
+        </div>
+      )}
+
+      {!hasMore && allDiscussions.length > 0 && (
+        <div className="text-center py-8">
+          <div className="text-muted-foreground text-sm">
+            You've reached the end of the discussions
+          </div>
+        </div>
+      )}
     </div>
   );
 }

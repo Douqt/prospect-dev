@@ -5,11 +5,16 @@ import { supabase } from "@/lib/supabaseClient";
 import Sidebar from "@/components/Sidebar";
 import Navbar from "@/components/Navbar";
 import { PolygonChart } from "@/components/PolygonChart";
+import { fetchMultiplePolygonData } from "@/lib/polygon-cache";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
+import { DiscussionVotes } from "@/components/discussions/DiscussionVotes";
 import { Search, MessageSquare, Users, TrendingUp, Clock, BarChart3, Zap, Star, Calendar } from "lucide-react";
+import { formatDistanceToNow } from "date-fns";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 
 interface Discussion {
@@ -21,6 +26,7 @@ interface Discussion {
   upvotes: number;
   downvotes: number;
   comment_count: number;
+  image_url?: string;
   profiles: {
     username?: string;
     display_name?: string;
@@ -31,9 +37,67 @@ interface Discussion {
   };
 }
 
+interface ForumStats {
+  price: string;
+  change: string;
+  changeColor: string;
+  posts: string;
+  members: string;
+}
+
 export default function StocksPage() {
+  const router = useRouter();
   const [searchQuery, setSearchQuery] = useState("");
   const [feedType, setFeedType] = useState<'for-you' | 'following'>('for-you');
+  const [symbolList] = useState(['NVDA', 'AAPL', 'MSFT', 'TSLA', 'GOOGL', 'AMZN']); // Preload common symbols
+
+  // Preload charts for feed optimization on component mount
+  useEffect(() => {
+    const preloadCharts = async () => {
+      try {
+        console.log('🔥 Preloading charts for stock feed symbols...');
+        // Batch load charts for common feed symbols to warm cache
+        await fetchMultiplePolygonData(symbolList, '1m', 6); // Load up to 6 symbols per batch
+        console.log('✅ Feed charts preloaded');
+      } catch (error) {
+        console.warn('⚠️ Chart preload warning (non-blocking):', error);
+      }
+    };
+
+    if (symbolList.length > 0) {
+      preloadCharts();
+    }
+  }, [symbolList]);
+
+  // Fetch top community stats
+  const topSymbols = ['NVDA', 'AAPL', 'MSFT', 'TSLA'];
+  const { data: topCommunitiesData, isLoading: topCommunitiesLoading } = useQuery({
+    queryKey: ["top-communities"],
+    queryFn: async () => {
+      const results = await Promise.all(
+        topSymbols.map(async (symbol) => {
+          try {
+            const response = await fetch(`/api/forum-stats?symbol=${symbol}`);
+            if (!response.ok) throw new Error(`Failed to fetch ${symbol} stats`);
+            const data: ForumStats = await response.json();
+            return { symbol, ...data };
+          } catch (error) {
+            console.error(`Error fetching stats for ${symbol}:`, error);
+            return {
+              symbol,
+              price: "Loading...",
+              change: "Loading...",
+              changeColor: "text-gray-600",
+              posts: "0",
+              members: "0"
+            };
+          }
+        })
+      );
+      return results;
+    },
+    refetchInterval: 60000 // Refresh every minute
+  });
 
   const { data: discussions, isLoading, error } = useQuery({
     queryKey: ["discussions", "stocks", feedType],
@@ -44,32 +108,32 @@ export default function StocksPage() {
       const { data: { user } } = await supabase.auth.getUser();
 
       if (feedType === 'following' && user) {
-        // For "Following" feed: only show posts from followed users
-        // First get users the current user is following
+        // For "Following" feed: only show posts from followed forums
+        // First get forums the current user is following
         const { data: followingData, error: followError } = await supabase
-          .from("follows")
-          .select("followed_user_id")
-          .eq("follower_user_id", user.id);
+          .from("community_memberships")
+          .select("community_symbol")
+          .eq("user_id", user.id);
 
         if (followError) {
-          console.error("Error fetching following data:", followError);
+          console.error("Error fetching forum following data:", followError);
           // Return empty array if following data can't be fetched
           return [];
         }
 
-        const followedUserIds = followingData?.map(f => f.followed_user_id) || [];
+        const followedForums = followingData?.map(f => f.community_symbol.toLowerCase()) || [];
 
-        if (followedUserIds.length === 0) {
-          // If user follows no one, return empty array
+        if (followedForums.length === 0) {
+          // If user follows no forums, return empty array
           return [];
         }
 
-        // Fetch discussions only from followed users
+        // Fetch discussions only from followed forums
         const { data, error } = await supabase
           .from("discussions")
-          .select("id, title, content, category, created_at, upvotes, downvotes, comment_count, user_id")
+          .select("id, title, content, category, created_at, upvotes, downvotes, comment_count, user_id, image_url")
           .eq("main_category", "stocks")
-          .in("user_id", followedUserIds)
+          .in("category", followedForums)
           .order("created_at", { ascending: false })
           .limit(20);
 
@@ -103,7 +167,7 @@ export default function StocksPage() {
         // For "For You" feed: show all stock discussions
         const { data, error } = await supabase
           .from("discussions")
-          .select("id, title, content, category, created_at, upvotes, downvotes, comment_count, user_id")
+          .select("id, title, content, category, created_at, upvotes, downvotes, comment_count, user_id, image_url")
           .eq("main_category", "stocks")
           .order("created_at", { ascending: false })
           .limit(20);
@@ -148,7 +212,7 @@ export default function StocksPage() {
   ) || [];
 
   return (
-    <div className="min-h-screen bg-background relative overflow-hidden text-foreground">
+    <div className="min-h-screen bg-background relative text-foreground">
       <Sidebar />
       <div
         className="absolute inset-0 z-0 pointer-events-none grid-background"
@@ -159,9 +223,10 @@ export default function StocksPage() {
       />
       <Navbar />
 
-      <main className="relative z-10 pt-24 ml-[300px] mr-6 flex justify-center">
-        {/* Social Media Style Feed */}
-        <div className="w-full max-w-5xl">
+      <main className="relative z-10 pt-24">
+        <div className="flex max-w-7xl mx-auto px-6">
+          {/* Main Feed - Centered */}
+          <div className="flex-1 max-w-4xl mx-auto">
           {/* Header with Search */}
           <div className="mb-8">
             <div className="flex items-center justify-between mb-6">
@@ -229,7 +294,7 @@ export default function StocksPage() {
           )}
 
           {/* Social Feed Posts */}
-          <div className="space-y-6">
+          <div className="space-y-8">
             {isLoading ? (
               <div className="flex items-center justify-center h-32">
                 <div className="text-muted-foreground">Loading discussions...</div>
@@ -254,96 +319,126 @@ export default function StocksPage() {
                 </CardContent>
               </Card>
             ) : (
-              filteredDiscussions.map((discussion) => (
-                <Link key={discussion.id} href={`/stocks/${discussion.category.toLowerCase()}/${discussion.id}`}>
-                  <Card className="border hover:shadow-lg transition-shadow cursor-pointer">
-                    <CardContent className="p-6">
-                      {/* Social Post Layout */}
-                      <div className="flex gap-6">
-                        {/* Post Content - Left Side */}
-                        <div className="flex-1">
-                          {/* User Info */}
-                          <div className="flex items-center gap-3 mb-3">
-                            <div className="w-10 h-10 rounded-full overflow-hidden flex items-center justify-center bg-gradient-to-br from-blue-500 to-purple-600">
-                              {discussion.profiles?.avatar_url ? (
-                                <img
-                                  src={discussion.profiles.avatar_url}
-                                  alt={`${discussion.profiles.display_name || discussion.profiles.username || 'Trader'} avatar`}
-                                  className="w-full h-full object-cover"
-                                />
-                              ) : (
-                                <span className="text-white text-sm font-semibold">
-                                  {discussion.profiles?.display_name?.charAt(0)?.toUpperCase() ||
-                                   discussion.profiles?.username?.charAt(0)?.toUpperCase() ||
-                                   'T'}
-                                </span>
-                              )}
-                            </div>
-                            <div>
-                              <p className="font-semibold text-sm">
-                                {discussion.profiles?.display_name || discussion.profiles?.username || 'Trader'}
-                              </p>
-                              <Badge variant="outline" className="text-xs">
-                                <Link href={`/stocks/${discussion.category.toLowerCase()}`}>
-                                  {discussion.category.toUpperCase()} Trader
-                                </Link>
-                              </Badge>
-                            </div>
-                          </div>
+              filteredDiscussions.map((discussion) => {
+                const userDisplayName = discussion.profiles?.display_name || discussion.profiles?.username || "Anonymous";
+                const timeAgo = formatDistanceToNow(new Date(discussion.created_at), { addSuffix: true });
 
-                          {/* Post Content */}
-                          <div className="mb-4">
-                            <h3 className="font-semibold text-lg mb-2 hover:text-[#e0a815] transition-colors cursor-pointer">
-                              <Link href={`/stocks/${discussion.category.toLowerCase()}`}>
-                                {discussion.title}
-                              </Link>
+                return (
+                  <Link key={discussion.id} href={`/stocks/${discussion.category.toLowerCase()}/${discussion.id}`}>
+                    <Card className="border-0 bg-card hover:shadow-lg transition-shadow cursor-pointer">
+                      <CardContent className="p-6">
+                        <div className="flex items-start gap-4">
+                          <DiscussionVotes
+                            discussionId={discussion.id}
+                            upvotes={discussion.upvotes}
+                            downvotes={discussion.downvotes}
+                          />
+
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 mb-2">
+                              <button
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  const username = discussion.profiles?.username;
+                                  if (username) {
+                                    router.push(`/profile/${username}`);
+                                  }
+                                }}
+                                className="hover:opacity-80 transition-opacity"
+                              >
+                                <Avatar className="w-8 h-8">
+                                  <AvatarImage src={discussion.profiles?.avatar_url} />
+                                  <AvatarFallback>
+                                    {userDisplayName[0]?.toUpperCase()}
+                                  </AvatarFallback>
+                                </Avatar>
+                              </button>
+                              <button
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  const username = discussion.profiles?.username;
+                                  if (username) {
+                                    router.push(`/profile/${username}`);
+                                  }
+                                }}
+                                className="hover:underline text-sm text-muted-foreground hover:text-foreground transition-colors"
+                              >
+                                <span className="font-medium">{userDisplayName}</span>
+                              </button>
+                              <span className="text-sm text-muted-foreground">•</span>
+                              <span className="text-sm text-muted-foreground">{timeAgo}</span>
+                            </div>
+
+                            <h3 className="text-xl font-semibold mb-2 cursor-pointer hover:text-[#e0a815] transition-colors"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  window.location.href = `/stocks/${discussion.category.toLowerCase()}/${discussion.id}`;
+                                }}>
+                              {discussion.title}
                             </h3>
-                            <p className="text-muted-foreground mb-3">
+
+                            <div className="text-muted-foreground mb-4 whitespace-pre-wrap">
                               {discussion.content}
-                            </p>
-                          </div>
+                            </div>
 
-                          {/* Engagement Stats */}
-                          <div className="flex items-center gap-6">
-                            <button className="flex items-center gap-2 text-sm text-muted-foreground hover:text-blue-600 transition-colors">
-                              <MessageSquare className="w-4 h-4" />
-                              {discussion.comment_count}
-                            </button>
-                            <button className="flex items-center gap-2 text-sm text-muted-foreground hover:text-green-600 transition-colors">
-                              <TrendingUp className="w-4 h-4" />
-                              {discussion.upvotes - discussion.downvotes}
-                            </button>
-                            <button className="flex items-center gap-2 text-sm text-muted-foreground hover:text-red-500 transition-colors">
-                              ❤️ {discussion.upvotes}
-                            </button>
+                            <div className="flex items-center gap-6">
+                              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                                <MessageSquare className="w-4 h-4" />
+                                <span>{discussion.comment_count} comments</span>
+                              </div>
+                              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                                <TrendingUp className="w-4 h-4" />
+                                <span>{discussion.upvotes - discussion.downvotes} points</span>
+                              </div>
+                              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                                <span>❤️ {discussion.upvotes}</span>
+                              </div>
+                            </div>
                           </div>
                         </div>
-
-                        {/* Chart - Right Side */}
-                        <div className="flex-none w-80">
-                          <Card className="p-3">
-                            <div className="text-center mb-2">
-                              <h4 className="font-semibold text-xs text-muted-foreground">
-                                {discussion.category.toUpperCase()} Chart
-                              </h4>
-                            </div>
-                            <div className="h-40 overflow-hidden">
-                              <PolygonChart
-                                symbol={discussion.category}
-                              />
-                            </div>
-                          </Card>
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                </Link>
-              ))
+                      </CardContent>
+                    </Card>
+                  </Link>
+                );
+              })
             )}
           </div>
+          </div>
+
+          {/* Top Communities Sidebar - Right Side */}
+          <div className="w-96 pl-8 border-l border-border">
+            <div className="sticky top-6">
+              <h2 className="text-xl font-semibold mb-4">Top Communities</h2>
+              <div className="space-y-4">
+                {topCommunitiesLoading ? (
+                  topSymbols.map((symbol) => (
+                    <Card key={symbol} className="text-center opacity-50">
+                      <CardContent className="p-4">
+                        <div className="text-2xl font-bold text-[#e0a815]">Loading...</div>
+                        <div className="text-sm text-muted-foreground">{symbol} Price</div>
+                        <div className="text-gray-600 text-sm">Loading...</div>
+                        <div className="text-xs text-muted-foreground mt-1">Loading members • Loading posts</div>
+                      </CardContent>
+                    </Card>
+                  ))
+                ) : (
+                  topCommunitiesData?.map((community) => (
+                    <Card key={community.symbol} className="text-center">
+                      <CardContent className="p-4">
+                        <div className="text-2xl font-bold text-[#e0a815]">{community.price}</div>
+                        <div className="text-sm text-muted-foreground">{community.symbol} Price</div>
+                        <div className={`${community.changeColor} text-sm`}>{community.change}</div>
+                        <div className="text-xs text-muted-foreground mt-1">{community.members} members • {community.posts} posts</div>
+                      </CardContent>
+                    </Card>
+                  ))
+                )}
+              </div>
+            </div>
+          </div>
         </div>
-
-
       </main>
     </div>
   );

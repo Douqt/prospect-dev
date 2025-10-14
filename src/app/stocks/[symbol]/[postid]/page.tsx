@@ -179,9 +179,38 @@ export default function PostPage({ params }: PostPageProps) {
 
               {/* Post Content */}
               <div className="prose prose-invert max-w-none mb-6">
-                <p className="text-lg leading-relaxed whitespace-pre-wrap">
-                  {discussion.content}
-                </p>
+                <div className="text-lg leading-relaxed">
+                  {discussion.content.split('\n').map((paragraph, index) => {
+                    // Check if paragraph contains image URL
+                    const imageMatch = paragraph.match(/https?:\/\/[^\s]+\.(jpg|jpeg|png|gif|webp)(\?[^\s]*)?/i);
+                    if (imageMatch) {
+                      return (
+                        <div key={index} className="mb-4 -mx-6">
+                          <img
+                            src={imageMatch[0]}
+                            alt="Post image"
+                            className="rounded-lg max-w-full h-auto max-h-[500px] object-cover w-full"
+                            onError={(e) => {
+                              e.currentTarget.style.display = 'none';
+                            }}
+                          />
+                        </div>
+                      );
+                    }
+
+                    // Check if paragraph is just an image URL on its own line
+                    if (paragraph.trim().match(/^https?:\/\/[^\s]+\.(jpg|jpeg|png|gif|webp)(\?[^\s]*)?$/i)) {
+                      return null; // Skip this line since we rendered it above
+                    }
+
+                    // Regular text paragraph
+                    return paragraph.trim() ? (
+                      <p key={index} className="mb-4 last:mb-0 whitespace-pre-wrap">
+                        {paragraph}
+                      </p>
+                    ) : null;
+                  })}
+                </div>
               </div>
 
               {/* Post Engagement Stats */}

@@ -4,6 +4,13 @@ import { NextResponse, type NextRequest } from 'next/server'
 export async function middleware(request: NextRequest) {
   const pathname = request.nextUrl.pathname
 
+  // Skip middleware for static assets and API routes to reduce recompiles
+  if (pathname.startsWith('/_next/') ||
+      pathname.startsWith('/api/') ||
+      pathname.includes('.')) {
+    return NextResponse.next()
+  }
+
   // Check for Supabase auth cookies directly (they're named like sb-{projectId}-auth-token)
   const cookieNames = request.cookies.getAll().map(c => c.name)
   const supabaseAuthCookies = cookieNames.filter(name => name.includes('sb-') && name.includes('-auth-token'))

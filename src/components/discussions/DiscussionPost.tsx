@@ -50,7 +50,7 @@ export function DiscussionPost({ discussion }: DiscussionPostProps) {
 
 
   return (
-    <Card className="p-6">
+    <div className="p-6 bg-card rounded-none border-0">
       <div className="flex items-start gap-4">
         <DiscussionVotes
           discussionId={discussion.id}
@@ -129,6 +129,6 @@ export function DiscussionPost({ discussion }: DiscussionPostProps) {
           </Collapsible>
         </div>
       </div>
-    </Card>
+    </div>
   );
 }

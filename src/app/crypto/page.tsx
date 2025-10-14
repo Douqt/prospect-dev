@@ -22,6 +22,7 @@ interface Discussion {
   upvotes: number;
   downvotes: number;
   comment_count: number;
+  image_url?: string;
   profiles: {
     username?: string;
     display_name?: string;
@@ -48,9 +49,9 @@ export default function CryptoPage() {
         // For "Following" feed: only show posts from followed users
         // First get users the current user is following
         const { data: followingData, error: followError } = await supabase
-          .from("follows")
-          .select("followed_user_id")
-          .eq("follower_user_id", user.id);
+          .from("community_memberships")
+          .select("user_id")
+          .eq("user_id", user.id);
 
         if (followError) {
           console.error("Error fetching following data:", followError);
@@ -58,7 +59,7 @@ export default function CryptoPage() {
           return [];
         }
 
-        const followedUserIds = followingData?.map(f => f.followed_user_id) || [];
+        const followedUserIds = followingData?.map(f => f.user_id) || [];
 
         if (followedUserIds.length === 0) {
           // If user follows no one, return empty array
@@ -68,7 +69,7 @@ export default function CryptoPage() {
         // Fetch discussions only from followed users
         const { data, error } = await supabase
           .from("discussions")
-          .select("id, title, content, category, created_at, upvotes, downvotes, comment_count, user_id")
+          .select("id, title, content, category, created_at, upvotes, downvotes, comment_count, user_id, image_url")
           .eq("main_category", "crypto")
           .in("user_id", followedUserIds)
           .order("created_at", { ascending: false })
@@ -104,7 +105,7 @@ export default function CryptoPage() {
         // For "For You" feed: show all crypto discussions
         const { data, error } = await supabase
           .from("discussions")
-          .select("id, title, content, category, created_at, upvotes, downvotes, comment_count, user_id")
+          .select("id, title, content, category, created_at, upvotes, downvotes, comment_count, user_id, image_url")
           .eq("main_category", "crypto")
           .order("created_at", { ascending: false })
           .limit(20);
@@ -256,16 +257,16 @@ export default function CryptoPage() {
               </Card>
             ) : (
               filteredDiscussions.map((discussion) => (
-                <Link key={discussion.id} href={`/crypto/${discussion.category.toLowerCase()}/${discussion.id}`}>
-                  <Card className="border hover:shadow-lg transition-shadow cursor-pointer">
-                    <CardContent className="p-6">
-                      {/* Social Post Layout */}
-                      <div className="flex gap-6">
-                        {/* Post Content - Left Side */}
-                        <div className="flex-1">
-                          {/* User Info */}
-                          <div className="flex items-center gap-3 mb-3">
-                            <div className="w-10 h-10 rounded-full overflow-hidden flex items-center justify-center bg-gradient-to-br from-blue-500 to-purple-600">
+                <Card key={discussion.id} className="border hover:shadow-lg transition-shadow">
+                  <CardContent className="p-6">
+                    {/* Social Post Layout */}
+                    <div className="flex gap-6">
+                      {/* Post Content - Left Side */}
+                      <div className="flex-1">
+                        {/* User Info */}
+                        <div className="flex items-center gap-3 mb-3">
+                          <Link href={`/profile/${discussion.profiles?.username || ''}`}>
+                            <div className="w-10 h-10 rounded-full overflow-hidden flex items-center justify-center bg-gradient-to-br from-blue-500 to-purple-600 cursor-pointer hover:opacity-80 transition-opacity">
                               {discussion.profiles?.avatar_url ? (
                                 <img
                                   src={discussion.profiles.avatar_url}
@@ -280,65 +281,90 @@ export default function CryptoPage() {
                                 </span>
                               )}
                             </div>
-                            <div>
-                              <p className="font-semibold text-sm">
+                          </Link>
+                          <div>
+                            <Link href={`/profile/${discussion.profiles?.username || ''}`}>
+                              <p className="font-semibold text-sm cursor-pointer hover:text-[#e0a815] transition-colors">
                                 {discussion.profiles?.display_name || discussion.profiles?.username || 'Trader'}
                               </p>
-                              <Badge variant="outline" className="text-xs">
-                                <Link href={`/crypto/${discussion.category.toLowerCase()}`}>
-                                  {discussion.category.toUpperCase()} Trader
-                                </Link>
-                              </Badge>
-                            </div>
-                          </div>
-
-                          {/* Post Content */}
-                          <div className="mb-4">
-                            <h3 className="font-semibold text-lg mb-2 hover:text-[#e0a815] transition-colors cursor-pointer">
+                            </Link>
+                            <Badge variant="outline" className="text-xs">
                               <Link href={`/crypto/${discussion.category.toLowerCase()}`}>
-                                {discussion.title}
+                                {discussion.category.toUpperCase()} Trader
                               </Link>
-                            </h3>
-                            <p className="text-muted-foreground mb-3">
-                              {discussion.content}
-                            </p>
-                          </div>
-
-                          {/* Engagement Stats */}
-                          <div className="flex items-center gap-6">
-                            <button className="flex items-center gap-2 text-sm text-muted-foreground hover:text-blue-600 transition-colors">
-                              <MessageSquare className="w-4 h-4" />
-                              {discussion.comment_count}
-                            </button>
-                            <button className="flex items-center gap-2 text-sm text-muted-foreground hover:text-green-600 transition-colors">
-                              <TrendingUp className="w-4 h-4" />
-                              {discussion.upvotes - discussion.downvotes}
-                            </button>
-                            <button className="flex items-center gap-2 text-sm text-muted-foreground hover:text-red-500 transition-colors">
-                              ❤️ {discussion.upvotes}
-                            </button>
+                            </Badge>
                           </div>
                         </div>
 
-                        {/* Chart - Right Side */}
-                        <div className="flex-none w-80">
-                          <Card className="p-3">
-                            <div className="text-center mb-2">
-                              <h4 className="font-semibold text-xs text-muted-foreground">
-                                {discussion.category.toUpperCase()} Chart
-                              </h4>
-                            </div>
-                            <div className="h-40 overflow-hidden">
-                              <PolygonChart
-                                symbol={discussion.category}
-                              />
-                            </div>
-                          </Card>
+                        {/* Post Content */}
+                        <div className="mb-4">
+                          <Link href={`/crypto/${discussion.category.toLowerCase()}/${discussion.id}`}>
+                            <h3 className="font-semibold text-lg mb-2 hover:text-[#e0a815] transition-colors cursor-pointer">
+                              {discussion.title}
+                            </h3>
+                          </Link>
+                          <div className="text-muted-foreground mb-3">
+                            {/* Render image if image_url exists */}
+                            {discussion.image_url && (
+                              <div className="mb-3">
+                                <img
+                                  src={discussion.image_url}
+                                  alt="Post image"
+                                  className="rounded-lg max-w-full h-auto max-h-96 object-cover border border-gray-200"
+                                  onLoad={() => console.log('✅ Image loaded successfully:', discussion.image_url)}
+                                  onError={(e) => {
+                                    console.log('❌ Image failed to load:', discussion.image_url);
+                                    e.currentTarget.style.display = 'none';
+                                  }}
+                                />
+                              </div>
+                            )}
+
+                            {/* Render text content */}
+                            {discussion.content.split('\n').map((paragraph, index) => (
+                              paragraph.trim() ? (
+                                <p key={index} className="mb-2 last:mb-0">
+                                  {paragraph}
+                                </p>
+                              ) : null
+                            ))}
+                          </div>
+                        </div>
+
+                        {/* Engagement Stats */}
+                        <div className="flex items-center gap-6">
+                          <button className="flex items-center gap-2 text-sm text-muted-foreground hover:text-blue-600 transition-colors">
+                            <MessageSquare className="w-4 h-4" />
+                            {discussion.comment_count}
+                          </button>
+                          <button className="flex items-center gap-2 text-sm text-muted-foreground hover:text-green-600 transition-colors">
+                            <TrendingUp className="w-4 h-4" />
+                            {discussion.upvotes - discussion.downvotes}
+                          </button>
+                          <button className="flex items-center gap-2 text-sm text-muted-foreground hover:text-red-500 transition-colors">
+                            ❤️ {discussion.upvotes}
+                          </button>
                         </div>
                       </div>
-                    </CardContent>
-                  </Card>
-                </Link>
+
+                      {/* Chart - Right Side */}
+                      <div className="flex-none w-80">
+                        <Card className="p-3">
+                          <div className="text-center mb-2">
+                            <h4 className="font-semibold text-xs text-muted-foreground">
+                              {discussion.category.toUpperCase()} Chart
+                            </h4>
+                          </div>
+                          <div className="h-40 overflow-hidden">
+                            <PolygonChart
+                              symbol={discussion.category}
+                            />
+                          </div>
+                        </Card>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
               ))
             )}
           </div>
