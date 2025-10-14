@@ -30,7 +30,7 @@ export function DiscussionForum({ category }: DiscussionForumProps) {
   return (
     <div className="p-6">
       <div className="flex items-center justify-between mb-6">
-        <h1 className="text-3xl font-bold">{categoryDisplayName} Discussions</h1>
+        <h1 className="text-3xl font-bold">{categoryDisplayName}  </h1>
         <Dialog open={newPostDialogOpen} onOpenChange={setNewPostDialogOpen}>
           <DialogTrigger asChild>
             <Button className="flex items-center gap-2">

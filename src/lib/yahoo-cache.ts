@@ -210,7 +210,7 @@ export const yahooCache = {
 
 // For debugging
 if (typeof window !== 'undefined') {
-  (window as any).yahooCache = yahooCache;
+  (window as unknown as Record<string, unknown>).yahooCache = yahooCache;
   console.log('🐛 Yahoo Finance cache debugging enabled. Use window.yahooCache in console.');
 }
 

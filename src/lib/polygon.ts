@@ -180,7 +180,8 @@ class PolygonAPIManager {
     // Calculate date range based on time range
     const now = new Date();
     let fromDate: Date;
-    let toDate = now;
+    let maxFromDate: Date;
+    const toDate = now;
     let multiplier = 1;
     let timespan = 'day';
 
@@ -213,7 +214,7 @@ class PolygonAPIManager {
       case 'max':
         timespan = 'month';
         multiplier = 1;
-        const maxFromDate = new Date('2010-01-01');
+        maxFromDate = new Date('2010-01-01');
         fromDate = maxFromDate;
         break;
       default:
