@@ -4,6 +4,9 @@ import { useEffect, useState } from "react";
 import { supabase } from "../lib/supabaseClient";
 import { timeAgo } from "../lib/time";
 import { useTheme } from "@/hooks/useTheme";
+import { Search, X } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { STOCK_FORUMS, CRYPTO_FORUMS, FUTURES_FORUMS } from "../../forum-categories";
 
 export default function NavBar() {
   const { theme, toggleTheme } = useTheme();
@@ -17,6 +20,11 @@ export default function NavBar() {
   const [displayName, setDisplayName] = useState<string | null>(null);
   const [localLastLogin, setLocalLastLogin] = useState<string | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchResults, setSearchResults] = useState<any[]>([]);
+  const [showSearchResults, setShowSearchResults] = useState(false);
+  const [isSearching, setIsSearching] = useState(false);
+  const router = useRouter();
 
   useEffect(() => {
     const s = supabase.auth.onAuthStateChange((_event, session) => {
@@ -188,13 +196,113 @@ export default function NavBar() {
       if (menuOpen && !(event.target as Element).closest('.dropdown-container')) {
         setMenuOpen(false);
       }
+      if (showSearchResults && !(event.target as Element).closest('.search-container')) {
+        setShowSearchResults(false);
+      }
     };
 
     document.addEventListener('mousedown', handleClickOutside);
     return () => {
       document.removeEventListener('mousedown', handleClickOutside);
     };
-  }, [menuOpen]);
+  }, [menuOpen, showSearchResults]);
+
+  // Search functionality
+  const performSearch = async (query: string) => {
+    if (!query.trim()) {
+      setSearchResults([]);
+      return;
+    }
+
+    setIsSearching(true);
+    try {
+      const upperQuery = query.toUpperCase();
+
+      // Get predefined forums that match the query
+      const matchingStockForums = STOCK_FORUMS
+        .filter(forum => forum.toUpperCase().includes(upperQuery))
+        .slice(0, 3)
+        .map(forum => ({
+          type: 'forum',
+          id: forum,
+          title: `${forum.toUpperCase()} Forum`,
+          subtitle: 'Stock Trading Forum',
+          url: `/stocks/${forum.toLowerCase()}`
+        }));
+
+      const matchingCryptoForums = CRYPTO_FORUMS
+        .filter(forum => forum.toUpperCase().includes(upperQuery))
+        .slice(0, 2)
+        .map(forum => ({
+          type: 'forum',
+          id: forum,
+          title: `${forum.toUpperCase()} Forum`,
+          subtitle: 'Crypto Trading Forum',
+          url: `/crypto/${forum.toLowerCase()}`
+        }));
+
+      const matchingFuturesForums = FUTURES_FORUMS
+        .filter(forum => forum.toUpperCase().includes(upperQuery))
+        .slice(0, 2)
+        .map(forum => ({
+          type: 'forum',
+          id: forum,
+          title: `${forum.toUpperCase()} Forum`,
+          subtitle: 'Futures Trading Forum',
+          url: `/futures/${forum.toLowerCase()}`
+        }));
+
+      // Search posts
+      const { data: postResults, error: postError } = await supabase
+        .from('discussions')
+        .select('id, title, category, created_at, main_category')
+        .or(`title.ilike.%${query}%,content.ilike.%${query}%`)
+        .limit(3);
+
+      if (postError) {
+        console.error('Post search error:', postError);
+      }
+
+      const predefinedForums = [
+        ...matchingStockForums,
+        ...matchingCryptoForums,
+        ...matchingFuturesForums
+      ];
+
+      // Convert post results to proper URLs based on main_category
+      const posts = postResults?.map(p => ({
+        type: 'post',
+        id: p.id,
+        title: p.title,
+        subtitle: `${p.category.toUpperCase()} • ${new Date(p.created_at).toLocaleDateString()}`,
+        url: `/${p.main_category}/${p.category.toLowerCase()}/${p.id}`
+      })) || [];
+
+      // Combine predefined forums and posts, limiting total results
+      const combinedResults = [...predefinedForums, ...posts].slice(0, 8);
+      setSearchResults(combinedResults);
+    } catch (error) {
+      console.error('Search error:', error);
+      setSearchResults([]);
+    } finally {
+      setIsSearching(false);
+    }
+  };
+
+  // Debounced search
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      performSearch(searchQuery);
+    }, 300);
+
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
+
+  const handleSearchResultClick = (url: string) => {
+    setSearchQuery("");
+    setShowSearchResults(false);
+    router.push(url);
+  };
 
   const signOut = async () => {
     await supabase.auth.signOut();
@@ -221,6 +329,61 @@ export default function NavBar() {
           </Link>
         </div>
 
+        {/* Center Search Bar */}
+        <div className="flex-1 max-w-2xl mx-8 relative search-container">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <input
+              type="text"
+              placeholder="Search forums, posts, stocks..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              onFocus={() => setShowSearchResults(true)}
+              className="w-full pl-10 pr-10 py-2 px-4 bg-muted border border-border rounded-full text-sm focus:outline-none focus:ring-2 focus:ring-[#e0a815] focus:border-transparent"
+            />
+            {searchQuery && (
+              <button
+                onClick={() => {
+                  setSearchQuery("");
+                  setShowSearchResults(false);
+                }}
+                className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground hover:text-foreground"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            )}
+
+            {/* Search Results Dropdown */}
+            {showSearchResults && searchQuery && (
+              <div className="absolute top-full left-0 right-0 mt-2 bg-popover border border-border rounded-lg shadow-xl z-50 max-h-96 overflow-y-auto">
+                {isSearching ? (
+                  <div className="p-4 text-center text-muted-foreground">
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-[#e0a815] mx-auto mb-2"></div>
+                    Searching...
+                  </div>
+                ) : searchResults.length > 0 ? (
+                  <div className="py-2">
+                    {searchResults.map((result, index) => (
+                      <button
+                        key={`${result.type}-${result.id}-${index}`}
+                        onClick={() => handleSearchResultClick(result.url)}
+                        className="w-full text-left px-4 py-3 hover:bg-muted transition-colors border-b border-border last:border-b-0"
+                      >
+                        <div className="font-medium text-foreground text-sm">{result.title}</div>
+                        <div className="text-xs text-muted-foreground mt-1">{result.subtitle}</div>
+                      </button>
+                    ))}
+                  </div>
+                ) : searchQuery.trim() ? (
+                  <div className="p-4 text-center text-muted-foreground text-sm">
+                    No results found for "{searchQuery}"
+                  </div>
+                ) : null}
+              </div>
+            )}
+          </div>
+        </div>
+
         <nav className="hidden md:flex items-center gap-4">
           {/* Primary top links */}
           <div className="flex items-center gap-3">
@@ -231,7 +394,6 @@ export default function NavBar() {
               About
             </Link>
           </div>
-
 
           {isLoading ? (
             // Show loading state while determining user session
@@ -357,7 +519,7 @@ export default function NavBar() {
                       </svg>
                       Profile
                     </a>
-                    
+
                     <div className={`flex items-center justify-between px-4 py-2 ${
                       theme === 'dark'
                         ? "text-gray-200"

@@ -151,7 +151,7 @@ export function AvatarUpload({ currentUrl, onUpload }: AvatarUploadProps) {
     <div className="flex items-center space-x-4">
       {/* Avatar Preview */}
       <div className="relative">
-        <div className="w-20 h-20 rounded-full border-2 border-border overflow-hidden bg-muted">
+        <div className="w-20 h-20 rounded-full overflow-hidden bg-muted">
           {avatarUrl ? (
             <img
               src={avatarUrl}

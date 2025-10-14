@@ -13,7 +13,9 @@ import { Badge } from "@/components/ui/badge";
 import { BarChart3, MessageSquare, Users, TrendingUp, ArrowLeft } from "lucide-react";
 import Link from "next/link";
 import { PolygonChartDynamic } from "@/components/PolygonChartDynamic";
+import { PolygonChart } from "@/components/PolygonChart";
 import FollowForumButton from "@/components/FollowForumButton";
+import { formatDistanceToNow } from "date-fns";
 
 interface StockData {
   symbol: string;
@@ -62,20 +64,25 @@ export default function StockPage({ params }: StockPageProps) {
     description: metadata?.description || ''
   };
 
-  // Check if this stock forum exists in our database
-  const { data: forumExists } = useQuery({
-    queryKey: ["forum-exists", resolvedParams?.symbol],
+  // Check if this stock forum has any posts
+  const { data: forumPosts } = useQuery({
+    queryKey: ["forum-posts", resolvedParams?.symbol],
     queryFn: async () => {
-      if (!resolvedParams?.symbol) return true; // Show forum while loading
+      if (!resolvedParams?.symbol) return [];
 
       const { data, error } = await supabase
         .from("discussions")
-        .select("id")
+        .select("id, title, content, created_at, upvotes, downvotes, comment_count, user_id")
         .eq("category", resolvedParams.symbol.toLowerCase())
+        .order("created_at", { ascending: false })
         .limit(1);
 
-      if (error) return false;
-      return data && data.length > 0;
+      if (error) {
+        console.error("Error fetching forum posts:", error);
+        return [];
+      }
+
+      return data || [];
     },
     enabled: !!resolvedParams?.symbol
   });
@@ -108,35 +115,51 @@ export default function StockPage({ params }: StockPageProps) {
     refetchOnWindowFocus: false,
   });
 
+  // Fetch posts specifically for this forum (like stocks page)
+  const { data: forumDiscussions, isLoading: discussionsLoading } = useQuery({
+    queryKey: ["forum-discussions", resolvedParams?.symbol],
+    queryFn: async () => {
+      if (!resolvedParams?.symbol) return [];
+
+      const { data, error } = await supabase
+        .from("discussions")
+        .select("id, title, content, category, created_at, upvotes, downvotes, comment_count, user_id, image_url")
+        .eq("category", resolvedParams.symbol.toLowerCase())
+        .order("created_at", { ascending: false })
+        .limit(20);
+
+      if (error) throw error;
+
+      // Fetch profiles separately
+      if (!data || data.length === 0) return [];
+
+      const discussionsWithProfiles = await Promise.all(
+        data.map(async (discussion) => {
+          const { data: profile } = await supabase
+            .from("profiles")
+            .select("username, display_name, avatar_url")
+            .eq("id", discussion.user_id)
+            .single();
+
+          return {
+            ...discussion,
+            profiles: profile || { username: null, display_name: null, avatar_url: null },
+            _count: {
+              comments: discussion.comment_count || 0
+            }
+          };
+        })
+      );
+
+      return discussionsWithProfiles;
+    },
+    enabled: !!resolvedParams?.symbol
+  });
+
   // Use real stats if available, otherwise show loading
   const displayStock = forumStats ? { ...fallbackStock, ...forumStats } : fallbackStock;
 
-  if (forumExists === false && resolvedParams) {
-    return (
-      <div className="min-h-screen bg-background relative overflow-hidden text-foreground">
-        <Sidebar />
-        <GridBackground />
-        <Navbar />
-        <main className="relative z-10 pt-24 pl-64 pr-6">
-          <div className="h-[calc(100vh-6rem)] flex items-center justify-center">
-            <div className="text-center">
-              <div className="text-6xl mb-4">📈</div>
-              <h1 className="text-2xl font-bold mb-2">Forum Not Found</h1>
-              <p className="text-muted-foreground mb-4">
-                The forum for ${resolvedParams.symbol.toUpperCase()} doesn't have any discussions yet.
-              </p>
-              <Link href="/stocks">
-                <Button>
-                  <ArrowLeft className="w-4 h-4 mr-2" />
-                  Back to All Forums
-                </Button>
-              </Link>
-            </div>
-          </div>
-        </main>
-      </div>
-    );
-  }
+  // Always show the forum page, even if it has no posts yet
 
   if (!resolvedParams) {
     return (
@@ -233,9 +256,170 @@ export default function StockPage({ params }: StockPageProps) {
               </CardContent>
             </Card>
 
-            {/* Infinite scroll container that allows full page scrolling */}
+            {/* Discussion Section */}
             <div className="pt-6">
-              <DiscussionList category={resolvedParams.symbol.toLowerCase()} />
+              {/* Social Feed Posts */}
+              <div className="border border-[#e0a815]/50 rounded-lg overflow-hidden">
+                {discussionsLoading ? (
+                  <Card className="text-center py-12 border-0 rounded-none">
+                    <CardContent>
+                      <div className="mb-4">
+                        <div className="text-muted-foreground">Loading {resolvedParams.symbol.toUpperCase()} discussions...</div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ) : forumDiscussions && forumDiscussions.length === 0 ? (
+                  <Card className="text-center py-12 border-0 rounded-none">
+                    <CardContent>
+                      <div className="mb-4">
+                        <MessageSquare className="h-16 w-16 text-muted-foreground mx-auto mb-4" />
+                        <h3 className="text-xl font-semibold mb-2">No discussions yet</h3>
+                        <p className="text-muted-foreground mb-4">
+                          Be the first to start a conversation about {resolvedParams.symbol.toUpperCase()}!
+                        </p>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ) : (
+                  forumDiscussions?.map((discussion, index) => {
+                    const userDisplayName = discussion.profiles?.display_name || discussion.profiles?.username || "Anonymous";
+                    const timeAgo = formatDistanceToNow(new Date(discussion.created_at), { addSuffix: true });
+
+                    return (
+                      <div key={discussion.id}>
+                        {index > 0 && (
+                          <div className="h-px bg-[#e0a815]/30 w-full"></div>
+                        )}
+                        <Card className={`border-0 hover:shadow-md transition-all duration-200 ${
+                          index === 0 ? 'rounded-t-lg' :
+                          index === forumDiscussions.length - 1 ? 'rounded-b-lg' : 'rounded-none'
+                        }`}>
+                          <CardContent className="p-6">
+                            {/* Social Post Layout */}
+                            <div className="flex gap-6">
+                              {/* Post Content - Left Side */}
+                              <div className="flex-1">
+                                {/* User Info */}
+                                <div className="flex items-center gap-3 mb-3">
+                                  <Link href={`/profile/${discussion.profiles?.username || ''}`}>
+                                    <div className="w-10 h-10 rounded-full overflow-hidden flex items-center justify-center bg-gradient-to-br from-blue-500 to-purple-600 cursor-pointer hover:opacity-80 transition-opacity">
+                                      {discussion.profiles?.avatar_url ? (
+                                        <img
+                                          src={discussion.profiles.avatar_url}
+                                          alt={(discussion.profiles?.display_name || discussion.profiles?.username || 'Trader') + ' avatar'}
+                                          className="w-full h-full object-cover"
+                                        />
+                                      ) : (
+                                        <span className="text-white text-sm font-semibold">
+                                          {discussion.profiles?.display_name?.charAt(0)?.toUpperCase() ??
+                                           discussion.profiles?.username?.charAt(0)?.toUpperCase() ??
+                                           'T'}
+                                        </span>
+                                      )}
+                                    </div>
+                                  </Link>
+                                  <div>
+                                    <Link href={`/profile/${discussion.profiles?.username || ''}`}>
+                                      <p className="font-semibold text-sm cursor-pointer hover:text-[#e0a815] transition-colors">
+                                        {discussion.profiles?.display_name ?? discussion.profiles?.username ?? 'Trader'}
+                                      </p>
+                                    </Link>
+                                    <span className="text-xs px-2 py-1 bg-muted rounded-md">
+                                      {discussion.category.toUpperCase()} Trader
+                                    </span>
+                                  </div>
+                                </div>
+
+                                {/* Post Content */}
+                                <div className="mb-4">
+                                  <Link href={`/stocks/${discussion.category.toLowerCase()}/${discussion.id}`}>
+                                    <h3 className="font-semibold text-lg mb-2 hover:text-[#e0a815] transition-colors cursor-pointer">
+                                      {discussion.title}
+                                    </h3>
+                                  </Link>
+                                  <div className="text-muted-foreground mb-3">
+                                    {/* Render image if image_url exists */}
+                                    {discussion.image_url && (
+                                      <div className="mb-3">
+                                        <img
+                                          src={discussion.image_url}
+                                          alt="Post image"
+                                          className="rounded-lg max-w-full h-auto max-h-96 object-cover"
+                                          onLoad={() => console.log('✅ Image loaded successfully:', discussion.image_url)}
+                                          onError={(e) => {
+                                            console.log('❌ Image failed to load:', discussion.image_url);
+                                            e.currentTarget.style.display = 'none';
+                                          }}
+                                        />
+                                      </div>
+                                    )}
+
+                                    {/* Render text content */}
+                                    {discussion.content.split('\n').map((paragraph, index) => (
+                                      paragraph.trim() ? (
+                                        <p key={index} className="mb-2 last:mb-0">
+                                          {paragraph}
+                                        </p>
+                                      ) : null
+                                    ))}
+                                  </div>
+                                </div>
+
+                                {/* Engagement Stats */}
+                                <div className="flex items-center gap-6">
+                                  <button className="flex items-center gap-2 text-sm text-muted-foreground hover:text-blue-600 transition-colors">
+                                    <MessageSquare className="w-4 h-4" />
+                                    {discussion.comment_count}
+                                  </button>
+                                  <button className="flex items-center gap-2 text-sm text-muted-foreground hover:text-green-600 transition-colors">
+                                    <TrendingUp className="w-4 h-4" />
+                                    {discussion.upvotes - discussion.downvotes}
+                                  </button>
+                                  <button className="flex items-center gap-2 text-sm text-muted-foreground hover:text-red-500 transition-colors">
+                                    ❤️ {discussion.upvotes}
+                                  </button>
+                                </div>
+                              </div>
+
+                              {/* Chart - Right Side */}
+                              <div className="flex-none w-80">
+                                <Card className="p-3">
+                                  <div className="text-center mb-2">
+                                    <h4 className="font-semibold text-xs text-muted-foreground">
+                                      {discussion.category.toUpperCase()} Chart
+                                    </h4>
+                                  </div>
+                                  <div className="h-40 overflow-hidden">
+                                    <PolygonChart
+                                      symbol={discussion.category.toUpperCase()}
+                                    />
+                                  </div>
+                                </Card>
+                              </div>
+                            </div>
+                          </CardContent>
+                        </Card>
+                      </div>
+                    );
+                  })
+                )}
+
+                {/* End of feed message */}
+                
+              </div>
+              
+              {!discussionsLoading && forumDiscussions && forumDiscussions.length > 0 && (
+                <div className="text-center py-6 px-4">
+                  <div className="inline-flex items-center gap-2 bg-muted/30 px-4 py-2 rounded-full border border-[#e0a815]/50">
+                    <div className="w-1 h-1 bg-[#e0a815] rounded-full"></div>
+                    <p className="text-muted-foreground text-xs">You've reached the end of the feed</p>
+                    <div className="w-1 h-1 bg-[#e0a815] rounded-full"></div>
+                  </div>
+                </div>
+              )}
+
+              {/* Add bottom spacing */}
+              <div className="h-16"></div>
             </div>
           </div>
         </main>

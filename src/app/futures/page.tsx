@@ -256,16 +256,16 @@ export default function FuturesPage() {
                 </CardContent>
               </Card>
             ) : (
-              filteredDiscussions.map((discussion) => (
-                <Card key={discussion.id} className="border hover:shadow-lg transition-shadow">
-                  <CardContent className="p-6">
-                    {/* Social Post Layout */}
-                    <div className="flex gap-6">
-                      {/* Post Content - Left Side */}
-                      <div className="flex-1">
-                        {/* User Info */}
-                        <div className="flex items-center gap-3 mb-3">
-                          <Link href={`/profile/${discussion.profiles?.username || ''}`}>
+              filteredDiscussions.map((discussion, index) => (
+                <div key={discussion.id}>
+                  {index > 0 && (
+                    <div className="h-px bg-[#e0a815]/30"></div>
+                  )}
+                  <Card className="border hover:shadow-lg transition-shadow">
+                    <CardContent className="p-6">
+                      <div className="flex gap-6">
+                        <div className="flex-1">
+                            <Link href={`/profile/${discussion.profiles?.username || ''}`}>
                             <div className="w-10 h-10 rounded-full overflow-hidden flex items-center justify-center bg-gradient-to-br from-blue-500 to-purple-600 cursor-pointer hover:opacity-80 transition-opacity">
                               {discussion.profiles?.avatar_url ? (
                                 <img
@@ -310,7 +310,7 @@ export default function FuturesPage() {
                                 <img
                                   src={discussion.image_url}
                                   alt="Post image"
-                                  className="rounded-lg max-w-full h-auto max-h-96 object-cover border border-gray-200"
+                                  className="rounded-lg max-w-full h-auto max-h-96 object-cover"
                                   onLoad={() => console.log('✅ Image loaded successfully:', discussion.image_url)}
                                   onError={(e) => {
                                     console.log('❌ Image failed to load:', discussion.image_url);
@@ -362,12 +362,26 @@ export default function FuturesPage() {
                           </div>
                         </Card>
                       </div>
-                    </div>
-                  </CardContent>
-                </Card>
+                    </CardContent>
+                  </Card>
+                </div>
               ))
             )}
           </div>
+
+          {/* End of feed message */}
+          {!isLoading && filteredDiscussions.length > 0 && (
+            <div className="text-center py-6 px-4">
+              <div className="inline-flex items-center gap-2 bg-muted/30 px-4 py-2 rounded-full border border-[#e0a815]/50">
+                <div className="w-1 h-1 bg-[#e0a815] rounded-full"></div>
+                <p className="text-muted-foreground text-xs">You've reached the end of the feed</p>
+                <div className="w-1 h-1 bg-[#e0a815] rounded-full"></div>
+              </div>
+            </div>
+          )}
+
+          {/* Add bottom spacing for scrolling */}
+          <div className="h-32 py-8"></div>
         </div>
 
 

@@ -13,25 +13,19 @@ export async function GET(request: Request) {
   try {
     const supabase = await createServerClient();
 
-    // Get forum posts count
-    const { count: postsCount, error: postsError } = await supabase
-      .from('discussions')
-      .select('id', { count: 'exact' })
-      .eq('category', symbol.toLowerCase());
+    // Get forum stats from community_stats table
+    const { data: communityStats, error: statsError } = await supabase
+      .from('community_stats')
+      .select('member_count, post_count')
+      .eq('community_symbol', symbol.toUpperCase())
+      .single();
 
-    if (postsError) {
-      console.error('Error fetching posts count:', postsError);
+    if (statsError) {
+      console.error('Error fetching community stats:', statsError);
     }
 
-    // Get forum members count (followers)
-    const { count: membersCount, error: membersError } = await supabase
-      .from('community_memberships')
-      .select('id', { count: 'exact' })
-      .eq('community_symbol', symbol.toUpperCase());
-
-    if (membersError) {
-      console.error('Error fetching members count:', membersError);
-    }
+    const membersCount = communityStats?.member_count || 0;
+    const postsCount = communityStats?.post_count || 0;
 
     // Fetch price and change from Yahoo Finance
     let price = "N/A";
@@ -108,7 +102,7 @@ export async function GET(request: Request) {
       change: change,
       changeColor: changeColor,
       posts: postsCount || 0,
-      members: membersCount ? (membersCount >= 1000000 ? `${(membersCount / 1000000).toFixed(1)}M` : membersCount >= 1000 ? `${(membersCount / 1000).toFixed(1)}K` : membersCount.toString()) : "1"
+      members: membersCount ? (membersCount >= 1000000 ? `${(membersCount / 1000000).toFixed(1)}M` : membersCount >= 1000 ? `${(membersCount / 1000).toFixed(1)}K` : membersCount.toString()) : "0"
     });
   } catch (error) {
     console.error('Forum stats API error:', error);
@@ -118,7 +112,7 @@ export async function GET(request: Request) {
       change: "N/A",
       changeColor: "text-gray-600",
       posts: 0,
-      members: "1"
+      members: "0"
     }, { status: 500 });
   }
 }

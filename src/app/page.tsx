@@ -348,7 +348,10 @@ export default function HomePage() {
             ) : (
               filteredDiscussions.map((discussion, index) => (
                 <div key={discussion.id}>
-                  <Card className={`border-0 hover:shadow-md transition-all duration-200 border-b border-[#e0a815]/10 ${
+                  {index > 0 && (
+                    <div className="h-px bg-[#e0a815]/30 w-full"></div>
+                  )}
+                  <Card className={`border-0 hover:shadow-md transition-all duration-200 ${
                     index === 0 ? 'rounded-t-lg' :
                     index === filteredDiscussions.length - 1 ? 'rounded-b-lg' : 'rounded-none'
                   }`}>
@@ -408,7 +411,7 @@ export default function HomePage() {
                                   <img
                                     src={discussion.image_url}
                                     alt="Post image"
-                                    className="rounded-lg max-w-full h-auto max-h-96 object-cover border border-gray-200"
+                                    className="rounded-lg max-w-full h-auto max-h-96 object-cover"
                                     onLoad={() => console.log('✅ Image loaded successfully:', discussion.image_url)}
                                     onError={(e) => {
                                       console.log('❌ Image failed to load:', discussion.image_url);

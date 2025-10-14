@@ -15,7 +15,7 @@ interface ChartData {
   price: number;
 }
 
-type TimeRange = '1h' | '24h' | '1w' | '1m' | '1y' | 'max';
+type TimeRange = '24h' | '1w' | '1m' | '1y' | 'max';
 
 export function PolygonChart({ symbol, symbols, enableBatchLoading = false }: PolygonChartProps) {
   const [data, setData] = useState<ChartData[]>([]);
@@ -105,10 +105,6 @@ export function PolygonChart({ symbol, symbols, enableBatchLoading = false }: Po
     let timeStep = 24 * 60 * 60 * 1000; // 1 day in milliseconds
 
     switch (timeRange) {
-      case '1h':
-        dataPoints = 60; // 60 minutes
-        timeStep = 60 * 1000;
-        break;
       case '24h':
         dataPoints = 24; // 24 hours
         timeStep = 60 * 60 * 1000;
@@ -185,7 +181,6 @@ export function PolygonChart({ symbol, symbols, enableBatchLoading = false }: Po
     new Date(timestamp).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 
   const timeRangeButtons: { value: TimeRange; label: string }[] = [
-    { value: '1h', label: '1H' },
     { value: '24h', label: '24H' },
     { value: '1w', label: '1W' },
     { value: '1m', label: '1M' },

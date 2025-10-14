@@ -248,9 +248,11 @@ export function DiscussionList({ category }: DiscussionListProps) {
       )}
 
       {!hasMore && allDiscussions.length > 0 && (
-        <div className="text-center py-8">
-          <div className="text-muted-foreground text-sm">
-            You've reached the end of the discussions
+        <div className="text-center py-6 px-4">
+          <div className="inline-flex items-center gap-2 bg-muted/30 px-4 py-2 rounded-full border border-[#e0a815]/50">
+            <div className="w-1 h-1 bg-[#e0a815] rounded-full"></div>
+            <p className="text-muted-foreground text-xs">You've reached the end of the feed</p>
+            <div className="w-1 h-1 bg-[#e0a815] rounded-full"></div>
           </div>
         </div>
       )}

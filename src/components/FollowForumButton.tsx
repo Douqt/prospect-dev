@@ -88,6 +88,26 @@ export default function FollowForumButton({ stockSymbol }: FollowForumButtonProp
       // Also invalidate the main feed queries to show updated content
       queryClient.invalidateQueries({ queryKey: ["discussions", "dashboard"] });
 
+      // Update community stats in database and invalidate queries
+      try {
+        await fetch('/api/update-community-stats', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            community_symbol: stockSymbol,
+            action: isFollowing ? 'unfollow' : 'follow'
+          }),
+        });
+      } catch (error) {
+        console.error('Error updating community stats:', error);
+      }
+
+      // Invalidate forum stats queries to update member counts
+      queryClient.invalidateQueries({ queryKey: ["top-communities"] });
+      queryClient.invalidateQueries({ queryKey: ["forum-stats"] });
+
     } catch (error) {
       console.error("Error toggling forum follow:", error);
       toast({
