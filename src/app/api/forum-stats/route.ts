@@ -102,7 +102,7 @@ export async function GET(request: Request) {
       change: change,
       changeColor: changeColor,
       posts: postsCount || 0,
-      members: membersCount ? (membersCount >= 1000000 ? `${(membersCount / 1000000).toFixed(1)}M` : membersCount >= 1000 ? `${(membersCount / 1000).toFixed(1)}K` : membersCount.toString()) : "0"
+      members: membersCount ? (membersCount >= 1000000 ? `${(membersCount / 1000000).toFixed(1)}M` : membersCount >= 1000 ? `${(membersCount / 1000).toFixed(1)}K` : membersCount.toString()) : "0",
     });
   } catch (error) {
     console.error('Forum stats API error:', error);
@@ -112,7 +112,7 @@ export async function GET(request: Request) {
       change: "N/A",
       changeColor: "text-gray-600",
       posts: 0,
-      members: "0"
+      members: "0",
     }, { status: 500 });
   }
 }

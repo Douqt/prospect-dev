@@ -1,15 +1,16 @@
--- Update community_stats table with correct member and post counts
+-- Update community_stats table with correct member, post, and likes counts
 -- This SQL will update existing records or insert new ones as needed
 
 -- First, delete existing records to avoid conflicts
 DELETE FROM community_stats;
 
 -- Insert fresh data for all forums
-INSERT INTO community_stats (community_symbol, member_count, post_count, last_activity, created_at, updated_at)
+INSERT INTO community_stats (community_symbol, member_count, post_count, likes, last_activity, created_at, updated_at)
 SELECT
     UPPER(d.category) as community_symbol,
     COALESCE(cm.member_count, 0) as member_count,
     COUNT(d.id) as post_count,
+    COALESCE(SUM(d.upvotes), 0) as likes,
     NOW() as last_activity,
     NOW() as created_at,
     NOW() as updated_at

@@ -73,7 +73,7 @@ export default function ProfilePage() {
       // Get posts
       const { data: discussionsData, error } = await supabase
         .from("discussions")
-        .select("id, title, content, user_id, image_url, category, created_at, upvotes, downvotes, comment_count")
+        .select("id, title, content, user_id, image_url, category, created_at, upvotes, downvotes, views, comment_count")
         .eq("user_id", userData.id)
         .order("created_at", { ascending: false })
         .limit(10);

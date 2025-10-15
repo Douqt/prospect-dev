@@ -118,7 +118,10 @@ export function DiscussionVotes({
         }
       }
 
+      // Invalidate queries to refresh parent component engagement stats
       queryClient.invalidateQueries({ queryKey: ["user-vote", discussionId] });
+      queryClient.invalidateQueries({ queryKey: ["discussions", "dashboard"] });
+      queryClient.invalidateQueries({ queryKey: ["forum-discussions"] });
     }
   });
 

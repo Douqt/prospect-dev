@@ -1,4 +1,5 @@
 import { createServerClient } from '@/lib/supabase-server';
+import { createClient } from '@supabase/supabase-js';
 import { NextResponse } from 'next/server';
 
 export async function POST(request: Request) {
@@ -48,8 +49,13 @@ export async function POST(request: Request) {
 
     newPostCount = postsCount || 0;
 
+    const supabaseAdmin = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY! // server only!
+    );
+
     // Update community stats with new counts
-    const { error: upsertError } = await supabase
+    const { error: upsertError } = await supabaseAdmin
       .from('community_stats')
       .upsert({
         community_symbol: upperSymbol,

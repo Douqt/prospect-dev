@@ -11,6 +11,8 @@ import { DiscussionVotes } from "./DiscussionVotes";
 import { ChevronDown, ChevronUp, MessageSquare, Image as ImageIcon } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { useRouter } from "next/navigation";
+import { LazyImage } from "@/components/LazyImage";
+import { STOCK_FORUMS, CRYPTO_FORUMS, FUTURES_FORUMS, GENERAL_FORUMS } from "../../../forum-categories";
 
 interface Discussion {
   id: string;
@@ -32,6 +34,7 @@ interface Discussion {
       down: number;
     };
   };
+  viewed?: boolean;
 }
 
 interface DiscussionPostProps {
@@ -47,10 +50,23 @@ export function DiscussionPost({ discussion }: DiscussionPostProps) {
 
   const timeAgo = formatDistanceToNow(new Date(discussion.created_at), { addSuffix: true });
 
-
+  // Helper function to determine router path based on category
+  const getRouterPath = (category: string): string => {
+    if (STOCK_FORUMS.includes(category.toUpperCase())) {
+      return '/stocks';
+    } else if (CRYPTO_FORUMS.includes(category.toUpperCase())) {
+      return '/crypto';
+    } else if (FUTURES_FORUMS.includes(category.toUpperCase())) {
+      return '/futures';
+    } else if (GENERAL_FORUMS.includes(category.toUpperCase())) {
+      return '/';
+    } else {
+      return '/stocks'; // Default fallback
+    }
+  };
 
   return (
-    <div className="p-6 bg-card rounded-none border-0">
+    <div className="group p-6 bg-card rounded-none border-0 hover:bg-gray-800 hover:shadow-md [&:has(.forum-tag:hover)]:bg-card text-card-foreground shadow-sm">
       <div className="flex items-start gap-4">
         <DiscussionVotes
           discussionId={discussion.id}
@@ -95,21 +111,43 @@ export function DiscussionPost({ discussion }: DiscussionPostProps) {
             <span className="text-sm text-muted-foreground">{timeAgo}</span>
           </div>
 
-          <h3 className="text-xl font-semibold mb-2">{discussion.title}</h3>
+          <h3 className={`text-xl font-semibold mb-2 ${discussion.viewed ? 'opacity-60' : ''}`}>
+            {discussion.title}
+            {discussion.viewed && (
+              <span className="ml-2 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-muted/50 text-muted-foreground">
+                <span className="w-1.5 h-1.5 bg-muted-foreground/60 rounded-full"></span>
+                Seen
+              </span>
+            )}
+          </h3>
 
-          <div className="text-muted-foreground mb-4 whitespace-pre-wrap">
+          <div className={`text-muted-foreground mb-4 whitespace-pre-wrap ${discussion.viewed ? 'opacity-70' : ''}`}>
             {discussion.content}
           </div>
 
           {discussion.image_url && (
             <div className="mb-4">
-              <img
+              <LazyImage
                 src={discussion.image_url}
                 alt={discussion.title}
                 className="max-w-full h-auto rounded-lg"
+                placeholder="blur"
               />
             </div>
           )}
+
+          <div className="flex items-center gap-2 mb-4">
+            <button
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                router.push(`${getRouterPath(discussion.category)}/${discussion.category.toLowerCase()}`);
+              }}
+              className="forum-tag inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-primary/10 text-primary hover:bg-primary/20 transition-colors"
+            >
+              {discussion.category}
+            </button>
+          </div>
 
           <Collapsible open={showComments} onOpenChange={setShowComments}>
             <CollapsibleTrigger asChild>

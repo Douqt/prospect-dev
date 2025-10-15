@@ -1,9 +1,11 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState, useEffect, useRef, useCallback } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { DiscussionPost } from "./DiscussionPost";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
+import { DiscussionListSkeleton } from "@/components/ui/skeleton-loading";
 
 interface Discussion {
   id: string;
@@ -25,6 +27,7 @@ interface Discussion {
       down: number;
     };
   };
+  viewed?: boolean;
 }
 
 interface DiscussionListProps {
@@ -32,6 +35,7 @@ interface DiscussionListProps {
 }
 
 export function DiscussionList({ category }: DiscussionListProps) {
+  const queryClient = useQueryClient();
   const [offset, setOffset] = useState(0);
   const [allDiscussions, setAllDiscussions] = useState<Discussion[]>([]);
   const [hasMore, setHasMore] = useState(true);
@@ -79,6 +83,35 @@ export function DiscussionList({ category }: DiscussionListProps) {
         }
       })) as Discussion[];
     }
+  });
+
+  // Query for view status of posts
+  const { data: viewedData } = useQuery({
+    queryKey: ["views", category, allDiscussions.map(d => d.id)],
+    queryFn: async () => {
+      if (!allDiscussions.length) return {};
+
+      try {
+        const response = await fetch('/api/posts/batch-viewed', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            postIds: allDiscussions.map(d => d.id),
+          }),
+        });
+
+        if (!response.ok) return {};
+        const data = await response.json();
+        return data.viewed || {};
+      } catch (error) {
+        console.error('Error fetching view status:', error);
+        return {};
+      }
+    },
+    enabled: !!allDiscussions.length,
+    staleTime: 1000 * 60 * 5, // Cache for 5 minutes
   });
 
   // Load more function for infinite scroll
@@ -130,7 +163,12 @@ export function DiscussionList({ category }: DiscussionListProps) {
           }
         })) as Discussion[];
 
-        setAllDiscussions(prev => [...prev, ...transformedMoreDiscussions]);
+        setAllDiscussions(prev => {
+          const newDiscussions = [...prev, ...transformedMoreDiscussions];
+          // Invalidate view cache when new posts are loaded
+          queryClient.invalidateQueries({ queryKey: ["views", category] });
+          return newDiscussions;
+        });
         setOffset(newOffset);
       }
     } catch (error) {
@@ -138,7 +176,7 @@ export function DiscussionList({ category }: DiscussionListProps) {
     } finally {
       setIsLoadingMore(false);
     }
-  }, [category, offset, isLoadingMore, hasMore]);
+  }, [category, offset, isLoadingMore, hasMore, queryClient]);
 
   // Intersection observer for infinite scroll
   useEffect(() => {
@@ -183,11 +221,7 @@ export function DiscussionList({ category }: DiscussionListProps) {
   }, [initialDiscussions]);
 
   if (isLoading) {
-    return (
-      <div className="flex items-center justify-center h-32">
-        <div className="text-muted-foreground">Loading discussions...</div>
-      </div>
-    );
+    return <DiscussionListSkeleton />;
   }
 
   if (error) {
@@ -220,14 +254,21 @@ export function DiscussionList({ category }: DiscussionListProps) {
 
   return (
     <div>
-      {allDiscussions.map((discussion, index) => (
-        <div key={discussion.id}>
-          <DiscussionPost discussion={discussion} />
-          {index < allDiscussions.length - 1 && (
-            <div className="border-t border-[#e0a815]/20"></div>
-          )}
-        </div>
-      ))}
+      {allDiscussions.map((discussion, index) => {
+        const discussionWithViewed = {
+          ...discussion,
+          viewed: viewedData ? viewedData[discussion.id] || false : false
+        };
+
+        return (
+          <div key={discussion.id}>
+            <DiscussionPost discussion={discussionWithViewed} />
+            {index < allDiscussions.length - 1 && (
+              <div className="border-t border-[#e0a815]/20"></div>
+            )}
+          </div>
+        );
+      })}
 
       {/* Load more trigger element */}
       {hasMore && (

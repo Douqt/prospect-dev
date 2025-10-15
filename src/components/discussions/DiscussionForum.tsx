@@ -6,6 +6,7 @@ import { Card } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogTrigger } from "@/components/ui/dialog";
 import { DiscussionList } from "./DiscussionList";
 import { CreatePostForm } from "./CreatePostForm";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { Plus } from "lucide-react";
 
 interface DiscussionForumProps {
@@ -46,6 +47,10 @@ export function DiscussionForum({ category }: DiscussionForumProps) {
           </DialogContent>
         </Dialog>
       </div>
+
+      <ErrorBoundary>
+        <DiscussionList category={category} />
+      </ErrorBoundary>
     </div>
   );
 }
