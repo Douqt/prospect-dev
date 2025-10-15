@@ -1,4 +1,4 @@
-Prospect (next_react_shadcn_ts) — Project Documentation
+Prospect (next_react_shadcn_ts) - Project Documentation
 
 This document explains the purpose, structure, setup, and development workflow for the Prospect project (a React + shadcn UI app migrated to Next.js App Router).
 
@@ -52,7 +52,7 @@ Prerequisites:
 ```powershell
 # from repository root
 npm install
-# Prospect (next_react_shadcn_ts) — Project Documentation
+# Prospect (next_react_shadcn_ts) - Project Documentation
 
 This document explains the purpose, structure, setup, and development workflow for the Prospect project (a React + shadcn UI app migrated to Next.js App Router).
 
@@ -140,33 +140,33 @@ Important: Do not commit `.env.local` to version control.
 
 ## Scripts (package.json)
 
-- `npm run dev` — start Next.js in development on port 3000
-- `npm run build` — build the app for production
-- `npm run start` — start the production server (after build)
-- `npm run export` — run `next export` (static export)
-- `npm run lint` — run ESLint
+- `npm run dev` - start Next.js in development on port 3000
+- `npm run build` - build the app for production
+- `npm run start` - start the production server (after build)
+- `npm run export` - run `next export` (static export)
+- `npm run lint` - run ESLint
 
 ## Project structure (key files)
 
 Top-level
-- `package.json` — project manifest and scripts
-- `tsconfig.json` — TypeScript config (root)
-- `DOCS.md` — (this file)
+- `package.json` - project manifest and scripts
+- `tsconfig.json` - TypeScript config (root)
+- `DOCS.md` - (this file)
 
 src/
-- `app/` — Next.js App Router folder
-  - `layout.tsx` — root layout; wraps pages with `Providers`
-  - `page.tsx` — home page (hero, features, CTA)
-  - `not-found.tsx` — 404 page (client component)
-- `components/` — presentational and re-usable components
-  - `FeatureCard.tsx` — small card for listing features
-  - `WaitlistForm.tsx` — client component with `useState`, posts to Supabase
-  - `ui/` — shadcn-ui adapted components (button, input, toaster, sonner wrapper, etc.)
+- `app/` - Next.js App Router folder
+  - `layout.tsx` - root layout; wraps pages with `Providers`
+  - `page.tsx` - home page (hero, features, CTA)
+  - `not-found.tsx` - 404 page (client component)
+- `components/` - presentational and re-usable components
+  - `FeatureCard.tsx` - small card for listing features
+  - `WaitlistForm.tsx` - client component with `useState`, posts to Supabase
+  - `ui/` - shadcn-ui adapted components (button, input, toaster, sonner wrapper, etc.)
 - `hooks/`
-  - `use-toast.ts` — app-specific toast + in-memory toast manager
+  - `use-toast.ts` - app-specific toast + in-memory toast manager
 - `lib/`
-  - `supabaseClient.ts` — Supabase client using `NEXT_PUBLIC_*` env vars
-- `assets/` — images and static assets (e.g., `prospect-logo.png`)
+  - `supabaseClient.ts` - Supabase client using `NEXT_PUBLIC_*` env vars
+- `assets/` - images and static assets (e.g., `prospect-logo.png`)
 
 ## Important implementation details
 
@@ -198,7 +198,7 @@ src/
 - Any component that uses React hooks such as `useState`, `useEffect`, `useRef` or browser APIs must be a Client Component.
 
 - Common fixes:
-  - If you see the error: `You're importing a component that needs useState. This React Hook only works in a Client Component. To fix, mark the file (or its parent) with the "use client" directive.` — add `"use client";` as the first line of that component file.
+  - If you see the error: `You're importing a component that needs useState. This React Hook only works in a Client Component. To fix, mark the file (or its parent) with the "use client" directive.` - add `"use client";` as the first line of that component file.
   - Prefer marking leaf components as clients instead of marking entire pages unless necessary.
 
 ## Migration notes (Vite → Next.js)
@@ -213,7 +213,7 @@ Key changes made during migration:
 ## Troubleshooting (common errors & fixes)
 
 - Hooks in Server Components
-  - Error: `You're importing a component that needs useState...` — Solution: Add `"use client"` to the top of the component file.
+  - Error: `You're importing a component that needs useState...` - Solution: Add `"use client"` to the top of the component file.
 
 - StaticImageData / Image src type errors
   - If TypeScript complains about using imported images directly in `img` `src`, use the `prospectLogo.src` property (when you import PNG files via Vite/Next image imports as static metadata). Alternatively use Next.js `Image` component.
@@ -233,7 +233,7 @@ Quality gate suggestions:
 ## Deployment
 
 Recommended options:
-- Vercel: Next.js is supported out of the box — create a new Vercel project, point to this repo, and set the environment variables (Supabase keys) in the Vercel dashboard.
+- Vercel: Next.js is supported out of the box - create a new Vercel project, point to this repo, and set the environment variables (Supabase keys) in the Vercel dashboard.
 - Netlify: supported but may require additional settings for Next.js App Router features.
 
 For a basic static export (if your app does not rely on SSR or dynamic routes):

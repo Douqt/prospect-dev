@@ -8,7 +8,7 @@ export default function CheckEmailPage() {
           Check your email
         </h1>
         <p className="text-sm text-muted-foreground mb-4">
-          We've sent a confirmation email — please check your inbox and follow
+          We've sent a confirmation email - please check your inbox and follow
           the link to complete account creation.
         </p>
         <div className="flex gap-2">
