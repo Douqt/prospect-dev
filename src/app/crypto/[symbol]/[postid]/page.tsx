@@ -93,7 +93,7 @@ export default function PostPage({ params }: PostPageProps) {
               <p className="text-muted-foreground mb-4">
                 This post doesn't exist or has been removed.
               </p>
-              <Link href={`/stocks/${resolvedParams?.symbol || 'general'}`}>
+              <Link href={`/crypto/${resolvedParams?.symbol || 'general'}`}>
                 <Button>
                   <ArrowLeft className="w-4 h-4 mr-2" />
                   Back to Forum
@@ -116,9 +116,9 @@ export default function PostPage({ params }: PostPageProps) {
         <div className="max-w-4xl mx-auto space-y-6">
 
           {/* Back Button */}
-          <Link href={`/stocks/${resolvedParams?.symbol || 'general'}`} className="inline-flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors">
+          <Link href={`/crypto/${resolvedParams?.symbol || 'general'}`} className="inline-flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors">
             <ArrowLeft className="w-4 h-4" />
-            Back to {resolvedParams?.symbol?.toUpperCase() || 'Stocks'} Forum
+            Back to {resolvedParams?.symbol?.toUpperCase() || 'Crypto'} Forum
           </Link>
 
           {/* Main Post Card */}
@@ -150,7 +150,7 @@ export default function PostPage({ params }: PostPageProps) {
                       {discussion.profiles?.display_name || discussion.profiles?.username || 'Trader'}
                     </h3>
                     <Badge variant="outline" className="text-xs">
-                      <Link href={`/stocks/${discussion.category.toLowerCase()}`}>
+                      <Link href={`/crypto/${discussion.category.toLowerCase()}`}>
                         {discussion.category.toUpperCase()}
                       </Link>
                     </Badge>

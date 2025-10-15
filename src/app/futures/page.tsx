@@ -4,15 +4,19 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabaseClient";
 import Sidebar from "@/components/Sidebar";
 import Navbar from "@/components/Navbar";
-import { GridBackground } from "@/components/GridBackground";
 import { PolygonChart } from "@/components/PolygonChart";
+import { fetchMultiplePolygonData } from "@/lib/polygon-cache";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
+import { DiscussionVotes } from "@/components/discussions/DiscussionVotes";
 import { Search, MessageSquare, Users, TrendingUp, Clock, BarChart3, Zap, Star, Calendar } from "lucide-react";
+import { formatDistanceToNow } from "date-fns";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
-
+import { FUTURES_FORUMS, isCryptoForum, isFuturesForum } from "../../../forum-categories";
 interface Discussion {
   id: string;
   title: string;
@@ -33,12 +37,69 @@ interface Discussion {
   };
 }
 
+interface ForumStats {
+  price: string;
+  change: string;
+  changeColor: string;
+  posts: string;
+  members: string;
+}
+
 export default function FuturesPage() {
-  const [searchQuery, setSearchQuery] = useState("");
+  const router = useRouter();
   const [feedType, setFeedType] = useState<'for-you' | 'following'>('for-you');
+  const [symbolList] = useState(['NVDA', 'AAPL', 'MSFT', 'TSLA', 'GOOGL', 'AMZN']); // Preload common symbols
+
+  // Preload charts for feed optimization on component mount
+  useEffect(() => {
+    const preloadCharts = async () => {
+      try {
+        console.log('🔥 Preloading charts for future feed symbols...');
+        // Batch load charts for common feed symbols to warm cache
+        await fetchMultiplePolygonData(symbolList, '1m', 6); // Load up to 6 symbols per batch
+        console.log('✅ Feed charts preloaded');
+      } catch (error) {
+        console.warn('⚠️ Chart preload warning (non-blocking):', error);
+      }
+    };
+
+    if (symbolList.length > 0) {
+      preloadCharts();
+    }
+  }, [symbolList]);
+
+  // Fetch top community stats
+  const topSymbols = ['NVDA', 'AAPL', 'MSFT', 'TSLA'];
+  const { data: topCommunitiesData, isLoading: topCommunitiesLoading } = useQuery({
+    queryKey: ["top-communities"],
+    queryFn: async () => {
+      const results = await Promise.all(
+        topSymbols.map(async (symbol) => {
+          try {
+            const response = await fetch(`/api/forum-stats?symbol=${symbol}`);
+            if (!response.ok) throw new Error(`Failed to fetch ${symbol} stats`);
+            const data: ForumStats = await response.json();
+            return { symbol, ...data };
+          } catch (error) {
+            console.error(`Error fetching stats for ${symbol}:`, error);
+            return {
+              symbol,
+              price: "Loading...",
+              change: "Loading...",
+              changeColor: "text-gray-600",
+              posts: "0",
+              members: "0"
+            };
+          }
+        })
+      );
+      return results;
+    },
+    refetchInterval: 60000 // Refresh every minute
+  });
 
   const { data: discussions, isLoading, error } = useQuery({
-    queryKey: ["discussions", "futures", feedType],
+    queryKey: ["discussions", "dashboard", feedType],
     queryFn: async () => {
       console.log(`Fetching discussions for ${feedType} feed...`);
 
@@ -46,32 +107,31 @@ export default function FuturesPage() {
       const { data: { user } } = await supabase.auth.getUser();
 
       if (feedType === 'following' && user) {
-        // For "Following" feed: only show posts from followed users
-        // First get users the current user is following
+        // For "Following" feed: show posts from followed forums (users following the forum)
+        // First get forums the current user is following
         const { data: followingData, error: followError } = await supabase
-          .from("follows")
-          .select("followed_user_id")
-          .eq("follower_user_id", user.id);
+          .from("community_memberships")
+          .select("community_symbol")
+          .eq("user_id", user.id);
 
         if (followError) {
-          console.error("Error fetching following data:", followError);
+          console.error("Error fetching forum following data:", followError);
           // Return empty array if following data can't be fetched
           return [];
         }
 
-        const followedUserIds = followingData?.map(f => f.followed_user_id) || [];
+        const followedForums = followingData?.map(f => f.community_symbol.toLowerCase()) || [];
 
-        if (followedUserIds.length === 0) {
-          // If user follows no one, return empty array
+        if (followedForums.length === 0) {
+          // If user follows no forums, return empty array
           return [];
         }
 
-        // Fetch discussions only from followed users
+        // Fetch discussions only from followed forums - don't limit main category
         const { data, error } = await supabase
           .from("discussions")
           .select("id, title, content, category, created_at, upvotes, downvotes, comment_count, user_id, image_url")
-          .eq("main_category", "futures")
-          .in("user_id", followedUserIds)
+          .in("category", followedForums)
           .order("created_at", { ascending: false })
           .limit(20);
 
@@ -81,8 +141,18 @@ export default function FuturesPage() {
         // Fetch profiles separately
         if (!data || data.length === 0) return [];
 
+        // Additional filtering: only show followed forums that are actually futures forums
+        const futuresFollowingDiscussions = data.filter(d => {
+          const category = d.category?.toUpperCase() || '';
+          const isFuturesForum = FUTURES_FORUMS.includes(category);
+          console.log(`Following category ${category}: is futures forum? ${isFuturesForum}`);
+          return isFuturesForum;
+        });
+
+        console.log('Filtered following futures discussions:', futuresFollowingDiscussions.length, 'out of', data.length);
+
         const discussionsWithProfiles = await Promise.all(
-          data.map(async (discussion) => {
+          futuresFollowingDiscussions.map(async (discussion) => {
             const { data: profile } = await supabase
               .from("profiles")
               .select("username, display_name, avatar_url")
@@ -102,11 +172,10 @@ export default function FuturesPage() {
         return discussionsWithProfiles as Discussion[];
 
       } else {
-        // For "For You" feed: show all futures discussions
+        // For "For You" feed: show all discussions (change filtering to client-side based on forum lists)
         const { data, error } = await supabase
           .from("discussions")
           .select("id, title, content, category, created_at, upvotes, downvotes, comment_count, user_id, image_url")
-          .eq("main_category", "futures")
           .order("created_at", { ascending: false })
           .limit(20);
 
@@ -118,8 +187,19 @@ export default function FuturesPage() {
         // Fetch profiles separately
         if (!data || data.length === 0) return [];
 
+        // Filter only futures forums
+        console.log('Available categories in data:', data.map(d => d.category));
+        const futuresDiscussions = data.filter(d => {
+          const category = d.category?.toUpperCase() || '';
+          const isFuturesForum = FUTURES_FORUMS.includes(category);
+          console.log(`Category ${category}: is futures forum? ${isFuturesForum}`);
+          return isFuturesForum;
+        });
+
+        console.log('Filtered futures discussions:', futuresDiscussions.length, 'out of', data.length);
+
         const discussionsWithProfiles = await Promise.all(
-          data.map(async (discussion) => {
+          futuresDiscussions.map(async (discussion) => {
             const { data: profile } = await supabase
               .from("profiles")
               .select("username, display_name, avatar_url")
@@ -141,16 +221,11 @@ export default function FuturesPage() {
     }
   });
 
-  // Filter discussions based on search query
-  const filteredDiscussions = discussions?.filter(discussion =>
-    searchQuery === "" ||
-    discussion.category.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    discussion.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    discussion.content.toLowerCase().includes(searchQuery.toLowerCase())
-  ) || [];
+  // Filter discussions based on search query - but search moved to navbar
+  const filteredDiscussions = discussions || [];
 
   return (
-    <div className="min-h-screen bg-background relative overflow-hidden text-foreground">
+    <div className="min-h-screen bg-background relative text-foreground">
       <Sidebar />
       <div
         className="absolute inset-0 z-0 pointer-events-none grid-background"
@@ -161,20 +236,21 @@ export default function FuturesPage() {
       />
       <Navbar />
 
-      <main className="relative z-10 pt-24 ml-[300px] mr-6 flex justify-center">
-        {/* Social Media Style Feed */}
-        <div className="w-full max-w-5xl">
+      <main className="relative z-10 pt-24 ml-[300px]">
+        <div className="flex max-w-7xl mx-auto px-6">
+          {/* Main Feed - Centered */}
+          <div className="flex-1 max-w-4xl mx-auto">
           {/* Header with Search */}
           <div className="mb-8">
             <div className="flex items-center justify-between mb-6">
               <div>
-                <h1 className="text-4xl font-bold mb-2">Futures Feed</h1>
+                <h1 className="text-4xl font-bold mb-2">Future Feed</h1>
                 <p className="text-muted-foreground">
-                  Follow futures traders and markets in real-time
+                  Follow future traders and markets in real-time
                 </p>
               </div>
               <Badge variant="secondary" className="bg-[#e0a815]/10 text-[#e0a815]">
-                All Futures Forums
+                All Forums
               </Badge>
             </div>
 
@@ -200,16 +276,7 @@ export default function FuturesPage() {
               </div>
             </div>
 
-            {/* Search Bar */}
-            <div className="relative max-w-lg">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input
-                placeholder="Search posts by futures contract, trader, or content..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-10 text-lg py-3"
-              />
-            </div>
+
           </div>
 
           {/* Error Display */}
@@ -231,25 +298,27 @@ export default function FuturesPage() {
           )}
 
           {/* Social Feed Posts */}
-          <div className="space-y-6">
+          <div className="border border-[#e0a815]/50 rounded-lg overflow-hidden">
             {isLoading ? (
-              <div className="flex items-center justify-center h-32">
-                <div className="text-muted-foreground">Loading discussions...</div>
-              </div>
+              <Card className="text-center py-12 border-0 rounded-none">
+                <CardContent>
+                  <div className="mb-4">
+                    <div className="text-muted-foreground">Loading future feed...</div>
+                  </div>
+                </CardContent>
+              </Card>
             ) : filteredDiscussions.length === 0 ? (
-              <Card className="text-center py-12">
+              <Card className="text-center py-12 border-0 rounded-none">
                 <CardContent>
                   <div className="mb-4">
                     <Search className="h-16 w-16 text-muted-foreground mx-auto mb-4" />
                     <h3 className="text-xl font-semibold mb-2">
-                      {searchQuery ? "No matching posts" : feedType === 'following' ? "No posts from followed forums yet" : "No posts yet"}
+                      {feedType === 'following' ? "No posts from followed forums yet" : "No future posts yet"}
                     </h3>
                     <p className="text-muted-foreground mb-4">
-                      {searchQuery
-                        ? "Try adjusting your search terms"
-                        : feedType === 'following'
-                        ? "Start following traders to see their posts here"
-                        : "Be the first to post in our trading community"
+                      {feedType === 'following'
+                        ? "Start following future traders to see their posts here"
+                        : "Be the first to post in our future trading community"
                       }
                     </p>
                   </div>
@@ -259,108 +328,131 @@ export default function FuturesPage() {
               filteredDiscussions.map((discussion, index) => (
                 <div key={discussion.id}>
                   {index > 0 && (
-                    <div className="h-px bg-[#e0a815]/30"></div>
+                    <div className="h-px bg-[#e0a815]/30 w-full"></div>
                   )}
-                  <Card className="border hover:shadow-lg transition-shadow">
+                  <Card
+                    className={`border-0 transition-all duration-200 cursor-pointer
+                    ${index === 0 ? 'rounded-t-lg' :
+                      index === filteredDiscussions.length - 1 ? 'rounded-b-lg' : 'rounded-none'}
+                    group hover:bg-gray-800 hover:shadow-md [&:has(.chart:hover)]:bg-card text-card-foreground shadow-sm`}
+                    onClick={() => {
+                      const category = discussion.category.toUpperCase();
+                      const routerPath = isCryptoForum(category) ? '/crypto' : isFuturesForum(category) ? '/futures' : '/stocks';
+                      router.push(`${routerPath}/${discussion.category.toLowerCase()}/${discussion.id}`);
+                    }}
+                  >
                     <CardContent className="p-6">
+                      {/* Social Post Layout */}
                       <div className="flex gap-6">
+                        {/* Post Content - Left Side */}
                         <div className="flex-1">
+                          {/* User Info */}
+                          <div className="flex items-center gap-3 mb-3">
                             <Link href={`/profile/${discussion.profiles?.username || ''}`}>
-                            <div className="w-10 h-10 rounded-full overflow-hidden flex items-center justify-center bg-gradient-to-br from-blue-500 to-purple-600 cursor-pointer hover:opacity-80 transition-opacity">
-                              {discussion.profiles?.avatar_url ? (
-                                <img
-                                  src={discussion.profiles.avatar_url}
-                                  alt={`${discussion.profiles.display_name || discussion.profiles.username || 'Trader'} avatar`}
-                                  className="w-full h-full object-cover"
-                                />
-                              ) : (
-                                <span className="text-white text-sm font-semibold">
-                                  {discussion.profiles?.display_name?.charAt(0)?.toUpperCase() ||
-                                   discussion.profiles?.username?.charAt(0)?.toUpperCase() ||
-                                   'T'}
-                                </span>
-                              )}
-                            </div>
-                          </Link>
-                          <div>
-                            <Link href={`/profile/${discussion.profiles?.username || ''}`}>
-                              <p className="font-semibold text-sm cursor-pointer hover:text-[#e0a815] transition-colors">
-                                {discussion.profiles?.display_name || discussion.profiles?.username || 'Trader'}
-                              </p>
-                            </Link>
-                            <Badge variant="outline" className="text-xs">
-                              <Link href={`/futures/${discussion.category.toLowerCase()}`}>
-                                {discussion.category.toUpperCase()} Trader
-                              </Link>
-                            </Badge>
-                          </div>
-                        </div>
-
-                        {/* Post Content */}
-                        <div className="mb-4">
-                          <Link href={`/futures/${discussion.category.toLowerCase()}/${discussion.id}`}>
-                            <h3 className="font-semibold text-lg mb-2 hover:text-[#e0a815] transition-colors cursor-pointer">
-                              {discussion.title}
-                            </h3>
-                          </Link>
-                          <div className="text-muted-foreground mb-3">
-                            {/* Render image if image_url exists */}
-                            {discussion.image_url && (
-                              <div className="mb-3">
-                                <img
-                                  src={discussion.image_url}
-                                  alt="Post image"
-                                  className="rounded-lg max-w-full h-auto max-h-96 object-cover"
-                                  onLoad={() => console.log('✅ Image loaded successfully:', discussion.image_url)}
-                                  onError={(e) => {
-                                    console.log('❌ Image failed to load:', discussion.image_url);
-                                    e.currentTarget.style.display = 'none';
-                                  }}
-                                />
+                              <div className="w-10 h-10 rounded-full overflow-hidden flex items-center justify-center bg-gradient-to-br from-blue-500 to-purple-600 cursor-pointer hover:opacity-80 transition-opacity">
+                                {discussion.profiles?.avatar_url ? (
+                                  <img
+                                    src={discussion.profiles.avatar_url}
+                                    alt={(discussion.profiles?.display_name || discussion.profiles?.username || 'Trader') + ' avatar'}
+                                    className="w-full h-full object-cover"
+                                  />
+                                ) : (
+                                  <span className="text-white text-sm font-semibold">
+                                    {discussion.profiles?.display_name?.charAt(0)?.toUpperCase() ??
+                                     discussion.profiles?.username?.charAt(0)?.toUpperCase() ??
+                                     'T'}
+                                  </span>
+                                )}
                               </div>
-                            )}
-
-                            {/* Render text content */}
-                            {discussion.content.split('\n').map((paragraph, index) => (
-                              paragraph.trim() ? (
-                                <p key={index} className="mb-2 last:mb-0">
-                                  {paragraph}
+                            </Link>
+                            <div>
+                              <Link href={`/profile/${discussion.profiles?.username || ''}`}>
+                                <p className="font-semibold text-sm cursor-pointer hover:text-[#e0a815] transition-colors">
+                                  {discussion.profiles?.display_name ?? discussion.profiles?.username ?? 'Trader'}
                                 </p>
-                              ) : null
-                            ))}
+                              </Link>
+                              <span
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  const category = discussion.category.toUpperCase();
+                                  const routerPath = isCryptoForum(category) ? '/crypto' : isFuturesForum(category) ? '/futures' : '/stocks';
+                                  window.location.href = `${routerPath}/${discussion.category.toLowerCase()}`;
+                                }}
+                                className="cursor-pointer text-xs px-2 py-1 bg-muted rounded-md hover:bg-muted/80 transition-colors"
+                              >
+                                {discussion.category.toUpperCase()}
+                              </span>
+                            </div>
+                          </div>
+
+                          {/* Post Content */}
+                          <div className="mb-4">
+                            <Link href={`/futures/${discussion.category.toLowerCase()}/${discussion.id}`}>
+                              <h3 className="font-semibold text-lg mb-2 hover:text-[#e0a815] transition-colors cursor-pointer">
+                                {discussion.title}
+                              </h3>
+                            </Link>
+                            <div className="text-muted-foreground mb-3">
+                              {/* Render image if image_url exists */}
+                              {discussion.image_url && (
+                                <div className="mb-3">
+                                  <img
+                                    src={discussion.image_url}
+                                    alt="Post image"
+                                    className="rounded-lg max-w-full h-auto max-h-96 object-cover"
+                                    onLoad={() => console.log('✅ Image loaded successfully:', discussion.image_url)}
+                                    onError={(e) => {
+                                      console.log('❌ Image failed to load:', discussion.image_url);
+                                      e.currentTarget.style.display = 'none';
+                                    }}
+                                  />
+                                </div>
+                              )}
+
+                              {/* Render text content */}
+                              {discussion.content.split('\n').map((paragraph, index) => (
+                                paragraph.trim() ? (
+                                  <p key={index} className="mb-2 last:mb-0">
+                                    {paragraph}
+                                  </p>
+                                ) : null
+                              ))}
+                            </div>
+                          </div>
+
+                          {/* Engagement Stats */}
+                          <div className="flex items-center gap-6">
+                            <button className="flex items-center gap-2 text-sm text-muted-foreground hover:text-blue-600 transition-colors">
+                              <MessageSquare className="w-4 h-4" />
+                              {discussion.comment_count}
+                            </button>
+                            <button className="flex items-center gap-2 text-sm text-muted-foreground hover:text-green-600 transition-colors">
+                              <TrendingUp className="w-4 h-4" />
+                              {discussion.upvotes - discussion.downvotes}
+                            </button>
+                            <button className="flex items-center gap-2 text-sm text-muted-foreground hover:text-red-500 transition-colors">
+                              ❤️ {discussion.upvotes}
+                            </button>
                           </div>
                         </div>
 
-                        {/* Engagement Stats */}
-                        <div className="flex items-center gap-6">
-                          <button className="flex items-center gap-2 text-sm text-muted-foreground hover:text-blue-600 transition-colors">
-                            <MessageSquare className="w-4 h-4" />
-                            {discussion.comment_count}
-                          </button>
-                          <button className="flex items-center gap-2 text-sm text-muted-foreground hover:text-green-600 transition-colors">
-                            <TrendingUp className="w-4 h-4" />
-                            {discussion.upvotes - discussion.downvotes}
-                          </button>
-                          <button className="flex items-center gap-2 text-sm text-muted-foreground hover:text-red-500 transition-colors">
-                            ❤️ {discussion.upvotes}
-                          </button>
+                        {/* Chart - Right Side */}
+                        <div className="chart flex-none w-80 relative z-10 pointer-events-auto" onClick={(e) => e.stopPropagation()}>
+                          <Card className="p-3 pointer-events-auto">
+                            <div className="text-center mb-2">
+                              <h4 className="font-semibold text-xs text-muted-foreground">
+                                {discussion.category.toUpperCase()} Chart
+                              </h4>
+                            </div>
+                            <div className="h-40 overflow-hidden">
+                              <PolygonChart
+                                symbol={discussion.category.toUpperCase()}
+                                symbols={filteredDiscussions.map(d => d.category.toUpperCase())}
+                                enableBatchLoading={true}
+                              />
+                            </div>
+                          </Card>
                         </div>
-                      </div>
-
-                      {/* Chart - Right Side */}
-                      <div className="flex-none w-80">
-                        <Card className="p-3">
-                          <div className="text-center mb-2">
-                            <h4 className="font-semibold text-xs text-muted-foreground">
-                              {discussion.category.toUpperCase()} Chart
-                            </h4>
-                          </div>
-                          <div className="h-40 overflow-hidden">
-                            <PolygonChart
-                              symbol={discussion.category}
-                            />
-                          </div>
-                        </Card>
                       </div>
                     </CardContent>
                   </Card>
@@ -380,11 +472,42 @@ export default function FuturesPage() {
             </div>
           )}
 
-          {/* Add bottom spacing for scrolling */}
-          <div className="h-32 py-8"></div>
+          {/* Add bottom spacing */}
+          <div className="h-16"></div>
+          </div>
+
+          {/* Top Communities Sidebar - Right Side */}
+          <div className="w-96 pl-8 border-border">
+            <div className="sticky top-6">
+              <h2 className="text-xl font-semibold mb-4">Top Communities</h2>
+              <div className="space-y-4">
+                {topCommunitiesLoading ? (
+                  topSymbols.map((symbol) => (
+                    <Card key={symbol} className="text-center opacity-50">
+                      <CardContent className="p-4">
+                        <div className="text-2xl font-bold text-[#e0a815]">Loading...</div>
+                        <div className="text-sm text-muted-foreground">{symbol} Price</div>
+                        <div className="text-gray-600 text-sm">Loading...</div>
+                        <div className="text-xs text-muted-foreground mt-1">Loading members • Loading posts</div>
+                      </CardContent>
+                    </Card>
+                  ))
+                ) : (
+                  topCommunitiesData?.map((community) => (
+                    <Card key={community.symbol} className="text-center">
+                      <CardContent className="p-4">
+                        <div className="text-2xl font-bold text-[#e0a815]">{community.price}</div>
+                        <div className="text-sm text-muted-foreground">{community.symbol} Price</div>
+                        <div className={`${community.changeColor} text-sm`}>{community.change}</div>
+                        <div className="text-xs text-muted-foreground mt-1">{community.members} members • {community.posts} posts</div>
+                      </CardContent>
+                    </Card>
+                  ))
+                )}
+              </div>
+            </div>
+          </div>
         </div>
-
-
       </main>
     </div>
   );

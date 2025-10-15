@@ -1,6 +1,7 @@
 "use client";
 import { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 import Sidebar from "@/components/Sidebar";
 import Navbar from "@/components/Navbar";
@@ -12,6 +13,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Search, MessageSquare, Users, TrendingUp, Clock, BarChart3, Zap, Star, Calendar } from "lucide-react";
 import Link from "next/link";
+import { isCryptoForum, isFuturesForum } from "../../forum-categories";
 
 // Mock data - in production this would come from your API
 interface Discussion {
@@ -34,72 +36,8 @@ interface Discussion {
   };
 }
 
-const topCommunities = [
-  {
-    symbol: "TSLA",
-    name: "Tesla Inc",
-    members: "0", // Will be updated with real data
-    posts: "0", // Will be updated with real data
-    change: "0%", // Will be updated with real data
-    changeColor: "text-gray-600"
-  },
-  {
-    symbol: "NVDA",
-    name: "Nvidia",
-    members: "0",
-    posts: "0",
-    change: "0%",
-    changeColor: "text-gray-600"
-  },
-  {
-    symbol: "AAPL",
-    name: "Apple Inc",
-    members: "0",
-    posts: "0",
-    change: "0%",
-    changeColor: "text-gray-600"
-  },
-  {
-    symbol: "MSFT",
-    name: "Microsoft",
-    members: "0",
-    posts: "0",
-    change: "0%",
-    changeColor: "text-gray-600"
-  }
-];
-
-const recentPosts = [
-  {
-    id: "1",
-    title: "Q4 Earnings Analysis",
-    author: "trader_pro",
-    category: "NVDA",
-    comments: 42,
-    votes: 156,
-    time: "1 hour ago"
-  },
-  {
-    id: "2",
-    title: "Market Outlook for 2024",
-    author: "market_watcher",
-    category: "GENERAL",
-    comments: 28,
-    votes: 89,
-    time: "2 hours ago"
-  },
-  {
-    id: "3",
-    title: "Technical Analysis: Support Levels",
-    author: "technical_guru",
-    category: "TSLA",
-    comments: 15,
-    votes: 67,
-    time: "3 hours ago"
-  }
-];
-
 export default function HomePage() {
+  const router = useRouter();
   const [searchQuery, setSearchQuery] = useState("");
   const [feedType, setFeedType] = useState<'for-you' | 'following'>('for-you');
 
@@ -351,13 +289,20 @@ export default function HomePage() {
                   {index > 0 && (
                     <div className="h-px bg-[#e0a815]/30 w-full"></div>
                   )}
-                  <Card className={`border-0 hover:shadow-md transition-all duration-200 ${
-                    index === 0 ? 'rounded-t-lg' :
-                    index === filteredDiscussions.length - 1 ? 'rounded-b-lg' : 'rounded-none'
-                  }`}>
+                  <Card
+                    className={`border-0 transition-all duration-200 cursor-pointer
+                    ${index === 0 ? 'rounded-t-lg' :
+                      index === filteredDiscussions.length - 1 ? 'rounded-b-lg' : 'rounded-none'}
+                    group hover:bg-gray-800 hover:shadow-md [&:has(.chart:hover)]:bg-card text-card-foreground shadow-sm`}
+                    onClick={() => {
+                      const category = discussion.category.toUpperCase();
+                      const routerPath = isCryptoForum(category) ? '/crypto' : isFuturesForum(category) ? '/futures' : '/stocks';
+                      router.push(`${routerPath}/${discussion.category.toLowerCase()}/${discussion.id}`);
+                    }}
+                  >
                     <CardContent className="p-6">
                       {/* Social Post Layout */}
-                      <div className="flex gap-6">
+                      <div className="flex gap-6 hover:pointer-events-auto">
                         {/* Post Content - Left Side */}
                         <div className="flex-1">
                           {/* User Info */}
@@ -388,11 +333,13 @@ export default function HomePage() {
                               <span
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  window.location.href = `/stocks/${discussion.category.toLowerCase()}`;
+                                  const category = discussion.category.toUpperCase();
+                                  const routerPath = isCryptoForum(category) ? '/crypto' : isFuturesForum(category) ? '/futures' : '/stocks';
+                                  window.location.href = `${routerPath}/${discussion.category.toLowerCase()}`;
                                 }}
                                 className="cursor-pointer text-xs px-2 py-1 bg-muted rounded-md hover:bg-muted/80 transition-colors"
                               >
-                                {discussion.category.toUpperCase()} Trader
+                                {discussion.category.toUpperCase()}
                               </span>
                             </div>
                           </div>
@@ -449,8 +396,8 @@ export default function HomePage() {
                         </div>
 
                         {/* Chart - Right Side */}
-                        <div className="flex-none w-80">
-                          <Card className="p-3">
+                        <div className="chart flex-none w-80 relative z-10 pointer-events-auto" onClick={(e) => e.stopPropagation()}>
+                          <Card className="p-3 pointer-events-auto">
                             <div className="text-center mb-2">
                               <h4 className="font-semibold text-xs text-muted-foreground">
                                 {discussion.category.toUpperCase()} Chart
@@ -459,7 +406,7 @@ export default function HomePage() {
                             <div className="h-40 overflow-hidden">
                               <PolygonChart
                                 symbol={discussion.category.toUpperCase()}
-                                symbols={filteredDiscussions.map(d => d.category.toUpperCase())}
+                                symbols={filteredDiscussions.map((d) => d.category.toUpperCase())}
                                 enableBatchLoading={true}
                               />
                             </div>

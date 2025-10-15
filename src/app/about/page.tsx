@@ -15,9 +15,9 @@ interface Stats {
 
 export default function AboutPage() {
   const [stats, setStats] = useState<Stats>({
-    activeTraders: 1247,
-    dailyTrades: 12834,
-    successRate: 87.2
+    activeTraders: 0,
+    dailyTrades: 0,
+    successRate: 0
   });
 
   useEffect(() => {
@@ -47,7 +47,7 @@ export default function AboutPage() {
           .limit(100); // Sample of recent posts
 
         if (!tradersError && tradersCount !== null) {
-          let successRate = 87.2; // Default fallback
+          let successRate = 0; // Default fallback
 
           if (!discussionError && discussionData && discussionData.length > 0) {
             const totalVotes = discussionData.reduce((sum, post) =>
@@ -61,9 +61,9 @@ export default function AboutPage() {
           }
 
           setStats({
-            activeTraders: tradersCount > 0 ? tradersCount : 1247,
-            dailyTrades: tradesCount || Math.floor(tradersCount * 10.27) || 12834, // Rough estimate based on active users
-            successRate: Math.max(successRate, 75.0) // Ensure reasonable minimum
+            activeTraders: tradersCount > 0 ? tradersCount : 0,
+            dailyTrades: tradesCount || Math.floor(tradersCount * 10.27) || 0, // Rough estimate based on active users
+            successRate: Math.max(successRate, 0) // Ensure reasonable minimum
           });
         }
       } catch (error) {
@@ -113,11 +113,11 @@ export default function AboutPage() {
               {[
                 { label: 'Active Traders', value: stats.activeTraders.toLocaleString(), prefix: '' },
                 { label: 'Daily Trades', value: stats.dailyTrades.toLocaleString(), prefix: '' },
-                { label: 'Success Rate', value: stats.successRate.toFixed(1), prefix: '%' }
+                { label: 'Success Rate', value: stats.successRate.toFixed(1), suffix: '%' }
               ].map((stat, index) => (
                 <div key={index} className="text-center">
                   <div className="text-5xl font-bold text-[#e0a815] mb-1">
-                    {stat.prefix}{stat.value}
+                    {stat.prefix}{stat.value}{stat.suffix}
                   </div>
                   <div className="text-sm text-muted-foreground font-medium">
                     {stat.label}

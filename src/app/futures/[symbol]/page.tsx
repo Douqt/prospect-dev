@@ -16,10 +16,10 @@ import { PolygonChartDynamic } from "@/components/PolygonChartDynamic";
 import { PolygonChart } from "@/components/PolygonChart";
 import FollowForumButton from "@/components/FollowForumButton";
 import { formatDistanceToNow } from "date-fns";
-import { useRouter } from "next/navigation";
 import { isCryptoForum, isFuturesForum } from "forum-categories";
+import { useRouter } from "next/navigation";
 
-interface StockData {
+interface FutureData {
   symbol: string;
   name: string;
   price: string;
@@ -30,8 +30,8 @@ interface StockData {
   description: string;
 }
 
-// Basic stock metadata - only for display purposes when stats are loading
-const getStockMetadata = (symbol: string) => {
+// Basic future metadata - only for display purposes when stats are loading
+const getFutureMetadata = (symbol: string) => {
   const upperSymbol = symbol.toUpperCase();
   return {
     symbol: upperSymbol,
@@ -40,11 +40,11 @@ const getStockMetadata = (symbol: string) => {
   };
 };
 
-interface StockPageProps {
+interface FuturePageProps {
   params: Promise<{ symbol: string }>;
 }
 
-export default function StockPage({ params }: StockPageProps) {
+export default function FuturePage({ params }: FuturePageProps) {
   // Unwrap the params Promise - this is needed in Next.js 15
   const router = useRouter();
   const [resolvedParams, setResolvedParams] = useState<{ symbol: string } | null>(null);
@@ -53,10 +53,10 @@ export default function StockPage({ params }: StockPageProps) {
     params.then(setResolvedParams);
   }, [params]);
 
-  const metadata = resolvedParams ? getStockMetadata(resolvedParams.symbol) : null;
+  const metadata = resolvedParams ? getFutureMetadata(resolvedParams.symbol) : null;
 
-  // Default stock data with loading states for real-time data
-  const fallbackStock: StockData = {
+  // Default future data with loading states for real-time data
+  const fallbackFuture: FutureData = {
     symbol: metadata?.symbol || '',
     name: metadata?.name || '',
     price: "Loading...",
@@ -67,7 +67,7 @@ export default function StockPage({ params }: StockPageProps) {
     description: metadata?.description || ''
   };
 
-  // Check if this stock forum has any posts
+  // Check if this future forum has any posts
   const { data: forumPosts } = useQuery({
     queryKey: ["forum-posts", resolvedParams?.symbol],
     queryFn: async () => {
@@ -118,7 +118,7 @@ export default function StockPage({ params }: StockPageProps) {
     refetchOnWindowFocus: false,
   });
 
-  // Fetch posts specifically for this forum (like stocks page)
+  // Fetch posts specifically for this forum (like futures page)
   const { data: forumDiscussions, isLoading: discussionsLoading } = useQuery({
     queryKey: ["forum-discussions", resolvedParams?.symbol],
     queryFn: async () => {
@@ -160,7 +160,7 @@ export default function StockPage({ params }: StockPageProps) {
   });
 
   // Use real stats if available, otherwise show loading
-  const displayStock = forumStats ? { ...fallbackStock, ...forumStats } : fallbackStock;
+  const displayFuture = forumStats ? { ...fallbackFuture, ...forumStats } : fallbackFuture;
 
   // Always show the forum page, even if it has no posts yet
 
@@ -190,47 +190,47 @@ export default function StockPage({ params }: StockPageProps) {
         <main className="flex-1 relative z-10 pt-24 pl-64 pr-0">
           <div className="max-w-6xl mx-auto p-6">
             {/* Back Button */}
-            <Link href="/stocks" className="inline-flex items-center gap-2 mb-6 text-muted-foreground hover:text-foreground transition-colors">
+            <Link href="/futures" className="inline-flex items-center gap-2 mb-6 text-muted-foreground hover:text-foreground transition-colors">
               <ArrowLeft className="w-4 h-4" />
-              Back to Stocks
+              Back to Futures
             </Link>
 
-            {/* Stock Header */}
+            {/* Future Header */}
             <div className="mb-8">
               <div className="flex items-start gap-4 mb-4">
                 <div className="w-16 h-16 rounded-xl bg-gradient-to-br from-[#e0a815]/10 to-[#f2c74b]/10 border border-[#e0a815]/20 flex items-center justify-center">
                   <BarChart3 className="h-8 w-8 text-[#e0a815]" />
                 </div>
                 <div className="space-y-1">
-                  <h1 className="text-4xl font-bold">{displayStock.symbol}</h1>
-                  <p className="text-muted-foreground text-lg">{displayStock.name}</p>
-                  <p className="text-muted-foreground">{displayStock.description}</p>
+                  <h1 className="text-4xl font-bold">{displayFuture.symbol}</h1>
+                  <p className="text-muted-foreground text-lg">{displayFuture.name}</p>
+                  <p className="text-muted-foreground">{displayFuture.description}</p>
                 </div>
               </div>
 
-              {/* Stock Stats */}
+              {/* Future Stats */}
               <div className="grid grid-cols-4 gap-4">
                 <Card>
                   <CardContent className="p-4 text-center">
-                    <div className="text-2xl font-bold text-[#e0a815]">{displayStock.price}</div>
+                    <div className="text-2xl font-bold text-[#e0a815]">{displayFuture.price}</div>
                     <div className="text-xs text-muted-foreground">Current Price</div>
                   </CardContent>
                 </Card>
                 <Card>
                   <CardContent className="p-4 text-center">
-                    <div className={`text-2xl font-bold ${displayStock.changeColor}`}>{displayStock.change}</div>
+                    <div className={`text-2xl font-bold ${displayFuture.changeColor}`}>{displayFuture.change}</div>
                     <div className="text-xs text-muted-foreground">Change</div>
                   </CardContent>
                 </Card>
                 <Card>
                   <CardContent className="p-4 text-center">
-                    <div className="text-2xl font-bold">{displayStock.posts.toLocaleString()}</div>
+                    <div className="text-2xl font-bold">{displayFuture.posts.toLocaleString()}</div>
                     <div className="text-xs text-muted-foreground">Posts</div>
                   </CardContent>
                 </Card>
                 <Card>
                   <CardContent className="p-4 text-center">
-                    <div className="text-2xl font-bold">{displayStock.members}</div>
+                    <div className="text-2xl font-bold">{displayFuture.members}</div>
                     <div className="text-xs text-muted-foreground">Members</div>
                   </CardContent>
                 </Card>
@@ -247,11 +247,11 @@ export default function StockPage({ params }: StockPageProps) {
               <CardHeader>
                 <CardTitle className="flex items-center gap-2 text-2xl">
                   <MessageSquare className="h-6 w-6 text-[#e0a815]" />
-                  {displayStock.symbol} Discussions
+                  {displayFuture.symbol} Discussions
                   <Badge variant="secondary" className="ml-2">Forum Activity</Badge>
                 </CardTitle>
                 <p className="text-muted-foreground">
-                  Join fellow traders discussing {displayStock.name}
+                  Join fellow traders discussing {displayFuture.name}
                 </p>
               </CardHeader>
               <CardContent className="p-0">
@@ -342,7 +342,7 @@ export default function StockPage({ params }: StockPageProps) {
 
                                 {/* Post Content */}
                                 <div className="mb-4">
-                                  <Link href={`/stocks/${discussion.category.toLowerCase()}/${discussion.id}`}>
+                                  <Link href={`/futures/${discussion.category.toLowerCase()}/${discussion.id}`}>
                                     <h3 className="font-semibold text-lg mb-2 hover:text-[#e0a815] transition-colors cursor-pointer">
                                       {discussion.title}
                                     </h3>
@@ -437,12 +437,12 @@ export default function StockPage({ params }: StockPageProps) {
         {/* Chart and Stats Sidebar - Right Side */}
         <aside className="w-80 pt-24 bg-transparent min-h-screen p-6 overflow-y-auto">
           <div className="space-y-6">
-            {/* Stock Chart - Top of sidebar */}
+            {/* Future Chart - Top of sidebar */}
             <Card>
               <CardHeader>
                 <CardTitle className="text-lg flex items-center gap-2">
                   <BarChart3 className="h-5 w-5 text-[#e0a815]" />
-                  {displayStock.symbol} Chart
+                  {displayFuture.symbol} Chart
                 </CardTitle>
               </CardHeader>
               <CardContent>

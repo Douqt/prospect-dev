@@ -16,6 +16,7 @@ import { Search, MessageSquare, Users, TrendingUp, Clock, BarChart3, Zap, Star, 
 import { formatDistanceToNow } from "date-fns";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { STOCK_FORUMS, isCryptoForum, isFuturesForum } from "../../../forum-categories";
 
 interface Discussion {
   id: string;
@@ -141,8 +142,18 @@ export default function StocksPage() {
         // Fetch profiles separately
         if (!data || data.length === 0) return [];
 
+        // Additional filtering: only show followed forums that are actually stock forums
+        const stockFollowingDiscussions = data.filter(d => {
+          const category = d.category?.toUpperCase() || '';
+          const isStockForum = STOCK_FORUMS.includes(category);
+          console.log(`Following category ${category}: is stock forum? ${isStockForum}`);
+          return isStockForum;
+        });
+
+        console.log('Filtered following stock discussions:', stockFollowingDiscussions.length, 'out of', data.length);
+
         const discussionsWithProfiles = await Promise.all(
-          data.map(async (discussion) => {
+          stockFollowingDiscussions.map(async (discussion) => {
             const { data: profile } = await supabase
               .from("profiles")
               .select("username, display_name, avatar_url")
@@ -162,11 +173,10 @@ export default function StocksPage() {
         return discussionsWithProfiles as Discussion[];
 
       } else {
-        // For "For You" feed: show all stock discussions only
+        // For "For You" feed: show all discussions (change filtering to client-side based on forum lists)
         const { data, error } = await supabase
           .from("discussions")
           .select("id, title, content, category, created_at, upvotes, downvotes, comment_count, user_id, image_url")
-          .eq("main_category", "stocks")
           .order("created_at", { ascending: false })
           .limit(20);
 
@@ -178,8 +188,19 @@ export default function StocksPage() {
         // Fetch profiles separately
         if (!data || data.length === 0) return [];
 
+        // Filter only stock forums
+        console.log('Available categories in data:', data.map(d => d.category));
+        const stockDiscussions = data.filter(d => {
+          const category = d.category?.toUpperCase() || '';
+          const isStockForum = STOCK_FORUMS.includes(category);
+          console.log(`Category ${category}: is stock forum? ${isStockForum}`);
+          return isStockForum;
+        });
+
+        console.log('Filtered stock discussions:', stockDiscussions.length, 'out of', data.length);
+
         const discussionsWithProfiles = await Promise.all(
-          data.map(async (discussion) => {
+          stockDiscussions.map(async (discussion) => {
             const { data: profile } = await supabase
               .from("profiles")
               .select("username, display_name, avatar_url")
@@ -310,13 +331,20 @@ export default function StocksPage() {
                   {index > 0 && (
                     <div className="h-px bg-[#e0a815]/30 w-full"></div>
                   )}
-                  <Card className={`border-0 hover:shadow-md transition-all duration-200 ${
-                    index === 0 ? 'rounded-t-lg' :
-                    index === filteredDiscussions.length - 1 ? 'rounded-b-lg' : 'rounded-none'
-                  }`}>
+                  <Card
+                    className={`border-0 transition-all duration-200 cursor-pointer
+                    ${index === 0 ? 'rounded-t-lg' :
+                      index === filteredDiscussions.length - 1 ? 'rounded-b-lg' : 'rounded-none'}
+                    group hover:bg-gray-800 hover:shadow-md [&:has(.chart:hover)]:bg-card text-card-foreground shadow-sm`}
+                    onClick={() => {
+                      const category = discussion.category.toUpperCase();
+                      const routerPath = isCryptoForum(category) ? '/crypto' : isFuturesForum(category) ? '/futures' : '/stocks';
+                      router.push(`${routerPath}/${discussion.category.toLowerCase()}/${discussion.id}`);
+                    }}
+                  >
                     <CardContent className="p-6">
                       {/* Social Post Layout */}
-                      <div className="flex gap-6">
+                      <div className="flex gap-6 hover:pointer-events-auto">
                         {/* Post Content - Left Side */}
                         <div className="flex-1">
                           {/* User Info */}
@@ -347,11 +375,13 @@ export default function StocksPage() {
                               <span
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  window.location.href = `/stocks/${discussion.category.toLowerCase()}`;
+                                  const category = discussion.category.toUpperCase();
+                                  const routerPath = isCryptoForum(category) ? '/crypto' : isFuturesForum(category) ? '/futures' : '/stocks';
+                                  window.location.href = `${routerPath}/${discussion.category.toLowerCase()}`;
                                 }}
                                 className="cursor-pointer text-xs px-2 py-1 bg-muted rounded-md hover:bg-muted/80 transition-colors"
                               >
-                                {discussion.category.toUpperCase()} Trader
+                                {discussion.category.toUpperCase()}
                               </span>
                             </div>
                           </div>
@@ -408,8 +438,8 @@ export default function StocksPage() {
                         </div>
 
                         {/* Chart - Right Side */}
-                        <div className="flex-none w-80">
-                          <Card className="p-3">
+                        <div className="chart flex-none w-80 relative z-10 pointer-events-auto" onClick={(e) => e.stopPropagation()}>
+                          <Card className="p-3 pointer-events-auto">
                             <div className="text-center mb-2">
                               <h4 className="font-semibold text-xs text-muted-foreground">
                                 {discussion.category.toUpperCase()} Chart
@@ -448,7 +478,7 @@ export default function StocksPage() {
           </div>
 
           {/* Top Communities Sidebar - Right Side */}
-          <div className="w-96 pl-8 border-l border-border">
+          <div className="w-96 pl-8 border-border">
             <div className="sticky top-6">
               <h2 className="text-xl font-semibold mb-4">Top Communities</h2>
               <div className="space-y-4">
