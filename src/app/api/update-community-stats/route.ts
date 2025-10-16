@@ -65,7 +65,9 @@ export async function POST(request: Request) {
         updated_at: new Date().toISOString()
       }, {
         onConflict: 'community_symbol'
-      });
+    });
+
+    console.log(`Updated stats for ${upperSymbol}: ${newMemberCount} members, ${newPostCount} posts`);
 
     if (upsertError) {
       console.error('Error updating community stats:', upsertError);

@@ -92,31 +92,40 @@ export function UnifiedDashboard({
     }
   }, [preloadSymbols, forumType]);
 
-  // Fetch top community stats
+  // Fetch top community stats based on weighted score
   const { data: topCommunitiesData, isLoading: topCommunitiesLoading } = useQuery({
     queryKey: ["top-communities", forumType],
     queryFn: async () => {
-      const results = await Promise.all(
-        topSymbols.map(async (symbol) => {
-          try {
-            const response = await fetch(`/api/forum-stats?symbol=${symbol}`);
-            if (!response.ok) throw new Error(`Failed to fetch ${symbol} stats`);
-            const data: ForumStats = await response.json();
-            return { symbol, ...data };
-          } catch (error) {
-            console.error(`Error fetching stats for ${symbol}:`, error);
-            return {
-              symbol,
-              price: "Loading...",
-              change: "Loading...",
-              changeColor: "text-gray-600",
-              posts: "0",
-              members: "0"
-            };
-          }
-        })
-      );
-      return results;
+      try {
+        const response = await fetch(`/api/top-communities?forumType=${forumType}&limit=5`);
+        if (!response.ok) throw new Error('Failed to fetch top communities');
+        const data = await response.json();
+        return data;
+      } catch (error) {
+        console.error('Error fetching top communities:', error);
+        // Fallback to old method if new API fails
+        const results = await Promise.all(
+          topSymbols.map(async (symbol) => {
+            try {
+              const response = await fetch(`/api/forum-stats?symbol=${symbol}`);
+              if (!response.ok) throw new Error(`Failed to fetch ${symbol} stats`);
+              const data: ForumStats = await response.json();
+              return { symbol, ...data };
+            } catch (error) {
+              console.error(`Error fetching stats for ${symbol}:`, error);
+              return {
+                symbol,
+                price: "Loading...",
+                change: "Loading...",
+                changeColor: "text-gray-600",
+                posts: "0",
+                members: "0"
+              };
+            }
+          })
+        );
+        return results;
+      }
     },
     refetchInterval: 60000
   });

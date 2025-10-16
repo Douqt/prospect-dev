@@ -90,7 +90,7 @@ export default function FollowForumButton({ stockSymbol }: FollowForumButtonProp
 
       // Update community stats in database and invalidate queries
       try {
-        await fetch('/api/update-community-stats', {
+        const response = await fetch('/api/update-community-stats', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -100,8 +100,16 @@ export default function FollowForumButton({ stockSymbol }: FollowForumButtonProp
             action: isFollowing ? 'unfollow' : 'follow'
           }),
         });
+
+        if (response.ok) {
+          const result = await response.json();
+          console.log('Community stats updated:', result);
+        } else {
+          console.error('Failed to update community stats:', response.statusText);
+        }
       } catch (error) {
         console.error('Error updating community stats:', error);
+        // Continue with cache invalidation even if stats update fails
       }
 
       // Invalidate forum stats queries to update member counts
