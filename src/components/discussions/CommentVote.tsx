@@ -94,6 +94,8 @@ export function CommentVote({
 
   const voteMutation = useMutation({
     mutationFn: async (voteType: "up" | "down") => {
+      console.log(`Starting vote mutation for comment ${commentId}, voteType: ${voteType}, currentVote: ${currentVote}`);
+
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("Must be logged in to vote");
 
@@ -109,21 +111,13 @@ export function CommentVote({
         throw existingVoteError;
       }
 
-      // First, get the current comment to ensure we have the latest vote counts
-      const { data: currentComment, error: fetchError } = await supabase
-        .from("comments")
-        .select("upvotes, downvotes")
-        .eq("id", commentId)
-        .single();
-
-      if (fetchError) throw fetchError;
-
-      const currentUpvotes = currentComment?.upvotes || 0;
-      const currentDownvotes = currentComment?.downvotes || 0;
+      console.log(`Existing vote for comment ${commentId}:`, existingVote);
 
       if (existingVote) {
         // Remove existing vote
         if (existingVote.vote_type === voteType) {
+          console.log(`Removing vote ${voteType} for comment ${commentId}`);
+
           const { error: deleteError } = await supabase
             .from("comment_votes")
             .delete()
@@ -141,6 +135,8 @@ export function CommentVote({
           return { action: "remove", prevVote: voteType };
         } else {
           // Switch vote
+          console.log(`Switching vote from ${existingVote.vote_type} to ${voteType} for comment ${commentId}`);
+
           const { error: updateVoteError } = await supabase
             .from("comment_votes")
             .update({ vote_type: voteType })
@@ -165,6 +161,8 @@ export function CommentVote({
         }
       } else {
         // Add new vote
+        console.log(`Adding new vote ${voteType} for comment ${commentId}`);
+
         const { error: insertError } = await supabase
           .from("comment_votes")
           .insert({
@@ -185,36 +183,39 @@ export function CommentVote({
       }
     },
     onSuccess: (result) => {
+      console.log(`Mutation onSuccess for comment ${commentId}, action: ${result.action}`, result);
+
+      // Update current vote state based on the mutation result
       if (result.action === "remove") {
-        if (result.prevVote === "up") setUpvotes(prev => prev - 1);
-        if (result.prevVote === "down") setDownvotes(prev => prev - 1);
         setCurrentVote(null);
       } else if (result.action === "switch") {
-        if (result.newVote === "up") {
-          setUpvotes(prev => prev + 1);
-          setDownvotes(prev => prev - 1);
-          setCurrentVote("up");
-        } else {
-          setDownvotes(prev => prev + 1);
-          setUpvotes(prev => prev - 1);
-          setCurrentVote("down");
-        }
+        setCurrentVote(result.newVote);
       } else if (result.action === "add") {
-        if (result.newVote === "up") {
-          setUpvotes(prev => prev + 1);
-          setCurrentVote("up");
-        } else {
-          setDownvotes(prev => prev + 1);
-          setCurrentVote("down");
-        }
+        setCurrentVote(result.newVote);
       }
 
+      // Invalidate queries to refresh data from server
       queryClient.invalidateQueries({ queryKey: ["comment-user-vote", commentId] });
+      queryClient.invalidateQueries({ queryKey: ["comments"] });
       onVoteChange?.();
     }
   });
 
   const handleVote = (voteType: "up" | "down") => {
+    console.log(`handleVote called for comment ${commentId}, voteType: ${voteType}, currentVote: ${currentVote}`);
+    console.log(`Mutation state before:`, {
+      isPending: voteMutation.isPending,
+      isSuccess: voteMutation.isSuccess,
+      isError: voteMutation.isError,
+      failureCount: voteMutation.failureCount
+    });
+
+    // Prevent double mutations
+    if (voteMutation.isPending) {
+      console.log(`Preventing double mutation for comment ${commentId}`);
+      return;
+    }
+
     voteMutation.mutate(voteType);
   };
 
