@@ -1,6 +1,7 @@
 import { createServerClient } from '@/lib/supabase-server';
 import { createClient } from '@supabase/supabase-js';
 import { NextResponse } from 'next/server';
+import { addIndexedFilter } from '@/lib/pagination';
 
 export async function POST(request: Request) {
   try {
@@ -36,11 +37,14 @@ export async function POST(request: Request) {
       newMemberCount = Math.max(0, newMemberCount - 1); // Don't go below 0
     }
 
-    // For post count, we'll need to count from discussions (can't easily track this)
-    const { count: postsCount, error: postsError } = await supabase
+    // For post count, we'll need to count from discussions with indexed filter
+    let postsQuery = supabase
       .from('discussions')
-      .select('id', { count: 'exact' })
-      .eq('category', community_symbol.toLowerCase());
+      .select('id', { count: 'exact' });
+
+    postsQuery = addIndexedFilter(postsQuery, 'discussions', { category: community_symbol.toLowerCase() });
+
+    const { count: postsCount, error: postsError } = await postsQuery;
 
     if (postsError) {
       console.error('Error fetching posts count:', postsError);

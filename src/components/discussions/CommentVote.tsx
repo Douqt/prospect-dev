@@ -2,6 +2,7 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabaseClient";
+import { addIndexedFilter } from "@/lib/pagination";
 import { ThumbsUp, ThumbsDown } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
@@ -24,19 +25,25 @@ export function CommentVote({
   const [downvotes, setDownvotes] = useState(initialDownvotes);
   const [currentVote, setCurrentVote] = useState<"up" | "down" | null>(null);
 
-  // Get user's current vote
+  // Get user's current vote with indexed filter
   const { data: userVote } = useQuery({
     queryKey: ["comment-user-vote", commentId],
     queryFn: async () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return null;
 
-      const { data, error } = await supabase
+      // Use indexed filter for comment vote lookup
+      let query = supabase
         .from("comment_votes")
-        .select("vote_type")
-        .eq("comment_id", commentId)
-        .eq("user_id", user.id)
-        .single();
+        .select("vote_type");
+
+      // Apply indexed filters for comment_id and user_id
+      query = addIndexedFilter(query, 'comment_votes', {
+        comment_id: commentId,
+        user_id: user.id
+      });
+
+      const { data, error } = await query.single();
 
       if (error && error.code !== "PGRST116") throw error; // PGRST116 = no rows
       return data?.vote_type || null;

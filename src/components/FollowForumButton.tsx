@@ -2,6 +2,7 @@
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabaseClient";
+import { addIndexedFilter } from "@/lib/pagination";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { UserPlus, UserCheck } from "lucide-react";
@@ -14,7 +15,7 @@ export default function FollowForumButton({ stockSymbol }: FollowForumButtonProp
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
-  // Check if user is following this forum
+  // Check if user is following this forum with indexed filter
   const { data: isFollowing } = useQuery({
     queryKey: ["forum-follow-status", stockSymbol],
     queryFn: async () => {
@@ -22,12 +23,18 @@ export default function FollowForumButton({ stockSymbol }: FollowForumButtonProp
 
       if (!user) return false;
 
-      const { data, error } = await supabase
+      // Use indexed filter for community membership lookup
+      let query = supabase
         .from("community_memberships")
-        .select("id")
-        .eq("user_id", user.id)
-        .eq("community_symbol", stockSymbol)
-        .single();
+        .select("id");
+
+      // Apply indexed filters for user_id and community_symbol
+      query = addIndexedFilter(query, 'community_memberships', {
+        user_id: user.id,
+        community_symbol: stockSymbol
+      });
+
+      const { data, error } = await query.single();
 
       if (error && (!error.code || error.code !== 'PGRST116')) { // PGRST116 is "not found"
         console.error("Error checking follow status:", error);

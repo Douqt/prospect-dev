@@ -3,6 +3,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabaseClient";
+import { buildCursorQuery, addIndexedFilter } from "@/lib/pagination";
 import Sidebar from "@/components/Sidebar";
 import Navbar from "@/components/Navbar";
 import { GridBackground } from "@/components/GridBackground";
@@ -11,7 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { BarChart3, MessageSquare, Users, TrendingUp, Heart, ArrowLeft } from "lucide-react";
 import Link from "next/link";
-import { PolygonChartDynamic } from "@/components/PolygonChartDynamic";
+
 import FollowForumButton from "@/components/FollowForumButton";
 import { useRouter } from "next/navigation";
 import { LazyImage } from "@/components/LazyImage";
@@ -24,9 +25,6 @@ import { Plus } from "lucide-react";
 interface ForumData {
   symbol: string;
   name: string;
-  price: string;
-  change: string;
-  changeColor: string;
   posts: number;
   members: string;
   description: string;
@@ -200,9 +198,6 @@ export function UnifiedForumPage({
   const fallbackData: ForumData = {
     symbol: metadata?.symbol || '',
     name: metadata?.name || '',
-    price: "Loading...",
-    change: "Loading...",
-    changeColor: "text-gray-600",
     posts: 0,
     members: "Loading...",
     description: metadata?.description || ''
@@ -234,18 +229,24 @@ export function UnifiedForumPage({
     refetchOnWindowFocus: false,
   });
 
-  // Fetch posts for this forum
+  // Fetch posts for this forum with cursor-based pagination and indexed filters
   const { data: forumDiscussions, isLoading: discussionsLoading } = useQuery({
     queryKey: ["forum-discussions", resolvedParams?.symbol],
     queryFn: async () => {
       if (!resolvedParams?.symbol) return [];
 
-      const { data, error } = await supabase
+      // Use indexed filter for forum discussions (category equivalent)
+      let query = supabase
         .from("discussions")
-        .select("id, title, content, category, created_at, upvotes, downvotes, views, comment_count, user_id, image_url")
-        .eq("category", resolvedParams.symbol.toLowerCase())
-        .order("created_at", { ascending: false })
-        .limit(20);
+        .select("id, title, content, category, created_at, upvotes, downvotes, views, comment_count, user_id, image_url");
+
+      // Apply indexed filter for category
+      query = addIndexedFilter(query, 'discussions', { category: resolvedParams.symbol.toLowerCase() });
+
+      // Apply cursor-based pagination
+      query = buildCursorQuery(query, { limit: 20 });
+
+      const { data, error } = await query;
 
       if (error) throw error;
 
@@ -253,11 +254,14 @@ export function UnifiedForumPage({
 
       const discussionsWithProfiles = await Promise.all(
         data.map(async (discussion) => {
-          const { data: profile } = await supabase
+          // Use indexed filter for profile lookup
+          let profileQuery = supabase
             .from("profiles")
-            .select("username, display_name, avatar_url")
-            .eq("id", discussion.user_id)
-            .single();
+            .select("username, display_name, avatar_url");
+
+          profileQuery = addIndexedFilter(profileQuery, 'profiles', { user_id: discussion.user_id });
+
+          const { data: profile } = await profileQuery.single();
 
           return {
             ...discussion,
@@ -325,19 +329,7 @@ export function UnifiedForumPage({
                 </div>
 
                 {/* Forum Stats */}
-                <div className="grid grid-cols-4 gap-4">
-                  <Card>
-                    <CardContent className="p-4 text-center">
-                      <div className="text-2xl font-bold text-[#e0a815]">{displayData.price}</div>
-                      <div className="text-xs text-muted-foreground">Current Price</div>
-                    </CardContent>
-                  </Card>
-                  <Card>
-                    <CardContent className="p-4 text-center">
-                      <div className={`text-2xl font-bold ${displayData.changeColor}`}>{displayData.change}</div>
-                      <div className="text-xs text-muted-foreground">Change</div>
-                    </CardContent>
-                  </Card>
+                <div className="grid grid-cols-2 gap-4">
                   <Card>
                     <CardContent className="p-4 text-center">
                       <div className="text-2xl font-bold">{displayData.posts.toLocaleString()}</div>
@@ -403,20 +395,7 @@ export function UnifiedForumPage({
             <aside className="w-96 pl-8">
               <div className="sticky top-6">
                 <div className="space-y-6">
-                  {/* Chart - Top of sidebar */}
-                  <Card>
-                    <CardHeader>
-                      <CardTitle className="text-lg flex items-center gap-2">
-                        <BarChart3 className="h-5 w-5 text-[#e0a815]" />
-                        {displayData.symbol} Chart
-                      </CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="h-64 w-full">
-                        <PolygonChartDynamic symbol={resolvedParams.symbol} />
-                      </div>
-                    </CardContent>
-                  </Card>
+
 
                   {/* Key Statistics */}
                   <Card>

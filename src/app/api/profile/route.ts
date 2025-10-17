@@ -1,5 +1,6 @@
 import { createServerClient } from '@/lib/supabase-server'
 import { NextResponse } from 'next/server'
+import { addIndexedFilter } from '@/lib/pagination'
 
 export async function GET(request: Request) {
   try {
@@ -23,12 +24,14 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: 'Access denied' }, { status: 403 })
     }
 
-    // Get user profile data
-    const { data: profile, error } = await supabase
+    // Get user profile data with indexed filter
+    let profileQuery = supabase
       .from('profiles')
-      .select('id, username, display_name, bio, avatar_url, dark_mode, last_login')
-      .eq('id', userId)
-      .single()
+      .select('id, username, display_name, bio, avatar_url, dark_mode, last_login');
+
+    profileQuery = addIndexedFilter(profileQuery, 'profiles', { user_id: userId });
+
+    const { data: profile, error } = await profileQuery.single()
 
     if (error) {
       console.error('Profile fetch error:', error)

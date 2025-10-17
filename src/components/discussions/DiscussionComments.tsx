@@ -2,6 +2,7 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabaseClient";
+import { buildCursorQuery, addIndexedFilter } from "@/lib/pagination";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
@@ -52,23 +53,32 @@ export function DiscussionComments({ discussionId }: DiscussionCommentsProps) {
   const { data: comments, isLoading, error, refetch } = useQuery({
     queryKey: ["comments", discussionId],
     queryFn: async () => {
-      // First get comments
-      const { data: commentsData, error: commentsError } = await supabase
+      // Use indexed filter for comments (post_id equivalent to discussion_id)
+      let query = supabase
         .from("comments")
-        .select("id, content, user_id, discussion_id, created_at, upvotes, downvotes")
-        .eq("discussion_id", discussionId)
-        .order("created_at", { ascending: true });
+        .select("id, content, user_id, discussion_id, created_at, upvotes, downvotes");
+
+      // Apply indexed filter for discussion_id (post_id equivalent)
+      query = addIndexedFilter(query, 'comments', { post_id: discussionId });
+
+      // Apply cursor-based pagination with ascending order for comments
+      query = buildCursorQuery(query, { limit: 50, orderColumn: 'created_at' });
+
+      const { data: commentsData, error: commentsError } = await query;
 
       if (commentsError) throw commentsError;
 
-      // Then get profiles separately
+      // Then get profiles separately with indexed filters
       const commentsWithProfiles = await Promise.all(
         commentsData.map(async (comment) => {
-          const { data: profile } = await supabase
+          // Use indexed filter for profile lookup
+          let profileQuery = supabase
             .from("profiles")
-            .select("username, display_name, avatar_url")
-            .eq("id", comment.user_id)
-            .single();
+            .select("username, display_name, avatar_url");
+
+          profileQuery = addIndexedFilter(profileQuery, 'profiles', { user_id: comment.user_id });
+
+          const { data: profile } = await profileQuery.single();
 
           return {
             ...comment,

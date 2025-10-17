@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { useParams } from "next/navigation";
+import { buildCursorQuery, addIndexedFilter, getNextCursor } from "@/lib/pagination";
 import Sidebar from "@/components/Sidebar";
 import Navbar from "@/components/Navbar";
 import { GridBackground } from "@/components/GridBackground";
@@ -64,19 +65,24 @@ export default function ProfilePage() {
       month: 'long'
     }) : "Unknown";
 
-  // Get user's posts
+  // Get user's posts with cursor-based pagination
   const { data: userPosts, isLoading: postsLoading } = useQuery({
     queryKey: ["user-posts", userData?.id],
     queryFn: async () => {
       if (!userData?.id) return [];
 
-      // Get posts
-      const { data: discussionsData, error } = await supabase
+      // Use indexed filter for user posts (author_id equivalent to user_id)
+      let query = supabase
         .from("discussions")
-        .select("id, title, content, user_id, image_url, category, created_at, upvotes, downvotes, views, comment_count")
-        .eq("user_id", userData.id)
-        .order("created_at", { ascending: false })
-        .limit(10);
+        .select("id, title, content, user_id, image_url, category, created_at, upvotes, downvotes, views, comment_count");
+
+      // Apply indexed filter for author_id (using user_id as equivalent)
+      query = addIndexedFilter(query, 'discussions', { author_id: userData.id });
+
+      // Apply cursor-based pagination (default limit 20 for better UX)
+      query = buildCursorQuery(query, { limit: 20 });
+
+      const { data: discussionsData, error } = await query;
 
       if (error) throw error;
 
@@ -100,10 +106,37 @@ export default function ProfilePage() {
     enabled: !!userData?.id
   });
 
+  // Get user's comments and comment upvotes with indexed filter
+  const { data: userCommentsData } = useQuery({
+    queryKey: ["user-comments", userData?.id],
+    queryFn: async () => {
+      if (!userData?.id) return { totalComments: 0, totalCommentUpvotes: 0 };
+
+      // Use indexed filter for user comments (author_id equivalent to user_id)
+      let query = supabase
+        .from("comments")
+        .select("id, upvotes, downvotes");
+
+      // Apply indexed filter for author_id (using user_id as equivalent)
+      query = addIndexedFilter(query, 'comments', { author_id: userData.id });
+
+      const { data: commentsData, error: commentsError } = await query;
+
+      if (commentsError) throw commentsError;
+
+      const totalComments = commentsData?.length || 0;
+      const totalCommentUpvotes = commentsData?.reduce((sum, comment) => sum + (comment.upvotes || 0), 0) || 0;
+
+      return { totalComments, totalCommentUpvotes };
+    },
+    enabled: !!userData?.id
+  });
+
   // Stats
   const totalPosts = userPosts?.length || 0;
-  const totalUpvotes = userPosts?.reduce((sum, post) => sum + (post._count.votes.up || 0), 0) || 0;
-  const totalComments = userPosts?.reduce((sum, post) => sum + (post._count.comments || 0), 0) || 0;
+  const totalPostUpvotes = userPosts?.reduce((sum, post) => sum + (post._count.votes.up || 0), 0) || 0;
+  const totalComments = userCommentsData?.totalComments || 0;
+  const totalCommentUpvotes = userCommentsData?.totalCommentUpvotes || 0;
 
   if (!userData) {
     return (
@@ -154,8 +187,8 @@ export default function ProfilePage() {
                       <div className="text-sm text-muted-foreground">Posts</div>
                     </div>
                     <div className="text-center">
-                      <div className="text-2xl font-bold text-green-600">{totalUpvotes}</div>
-                      <div className="text-sm text-muted-foreground">Upvotes</div>
+                      <div className="text-2xl font-bold text-green-600">{totalPostUpvotes}</div>
+                      <div className="text-sm text-muted-foreground">Post Upvotes</div>
                     </div>
                     <div className="text-center">
                       <div className="text-2xl font-bold text-blue-600">{totalComments}</div>

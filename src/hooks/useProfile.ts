@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabaseClient";
+import { addIndexedFilter } from "@/lib/pagination";
 
 interface Profile {
   id: string;
@@ -24,11 +25,15 @@ export function useProfile(userId?: string) {
     queryFn: async () => {
       if (!userId) return null;
 
-      const { data, error } = await supabase
+      // Use indexed filter for profile lookup
+      let query = supabase
         .from("profiles")
-        .select("id, username, display_name, bio, avatar_url, dark_mode, onboarded")
-        .eq("id", userId)
-        .single();
+        .select("id, username, display_name, bio, avatar_url, dark_mode, onboarded");
+
+      // Apply indexed filter for user_id
+      query = addIndexedFilter(query, 'profiles', { user_id: userId });
+
+      const { data, error } = await query.single();
 
       if (error) throw error;
       return data as Profile;

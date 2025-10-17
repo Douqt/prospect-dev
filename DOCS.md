@@ -6,13 +6,12 @@ Based on my analysis of the Prospect.money codebase, here's a complete documenta
 
 ## 🏗️ __Project Architecture Overview__
 
-__Prospect.money__ is a Next.js 15 social trading platform built with:
+__Prospect.money__ is a Next.js 15 discussion platform built with:
 
 - __Frontend__: React 18, TypeScript, Tailwind CSS, Shadcn/UI
 - __Backend__: Next.js API routes, Supabase (PostgreSQL + Auth)
 - __State Management__: TanStack Query (React Query) for server state
 - __Styling__: Tailwind CSS with custom theme provider
-- __Charts__: Yahoo Finance API (temporary) for financial data
 - __Database__: PostgreSQL via Supabase
 
 ---
@@ -26,7 +25,6 @@ __Prospect.money__ is a Next.js 15 social trading platform built with:
 - __Styling__: Tailwind CSS 3.4.17 with animations
 - __State Management__: TanStack React Query 5.83.0
 - __Database__: Supabase SSR 0.7.0 + Supabase JS 2.58.0
-- __Charts__: Recharts 2.15.4, Yahoo Finance API
 - __Icons__: Lucide React 0.462.0, Heroicons 2.2.0
 
 ### __next.config.mjs__
@@ -120,46 +118,7 @@ __Purpose__: Top navigation bar with search
 
 ---
 
-## 📊 __Financial Data & Charts__
 
-### __src/lib/polygon.ts__ (Currently Unused)
-
-__Purpose__: Polygon.io API integration (backup system)
-
-- __Rate Limiting__: 5 requests per minute with backoff
-- __Caching__: LRU cache with 60-second TTL
-- __Error Handling__: Exponential backoff and retries
-
-### __src/lib/polygon-cache.ts__
-
-__Purpose__: Chart data management (currently using Yahoo)
-
-- __Temporary System__: Proxies to Yahoo Finance
-- __Easy Switching__: Designed for Polygon.io fallback
-
-### __src/lib/yahoo-cache.ts__
-
-__Purpose__: Yahoo Finance API integration
-
-- __In-Memory Cache__: 5-minute TTL for chart data
-- __Server API__: Bypasses CORS restrictions
-- __Data Transformation__: Converts Yahoo format to app format
-
-### __src/app/api/yahoo-finance/route.ts__
-
-__Purpose__: Server-side Yahoo Finance proxy
-
-- __CORS Bypass__: Handles Yahoo Finance API calls
-- __Data Processing__: Transforms response format
-- __Error Handling__: Graceful fallbacks
-
-### __src/components/PolygonChart.tsx__
-
-__Purpose__: Financial chart component
-
-- __Time Ranges__: 24h, 1w, 1m, 1y, max
-- __Batch Loading__: Optimizes feed performance
-- __Responsive Design__: Adapts to container size
 
 ---
 
@@ -262,7 +221,6 @@ __Purpose__: Community statistics API
 
 - __Member Counts__: Community membership data
 - __Post Counts__: Discussion activity metrics
-- __Price Integration__: Yahoo Finance price data
 
 ### __src/components/FollowForumButton.tsx__
 
@@ -383,9 +341,8 @@ CREATE TABLE user_post_views (
 1. __Authentication__: Middleware → Supabase Auth → Profile Check → Onboarding
 2. __Posts__: User creates → API validates → Database stores → Feed displays
 3. __Views__: Post loads → API records view → Database tracks → UI shows indicators
-4. __Charts__: Component requests → Cache checks → Yahoo API → Transform → Display
-5. __Voting__: User votes → API updates → Query invalidation → UI updates
-6. __Search__: Navbar input → API searches → Multiple data sources → Results display
+4. __Voting__: User votes → API updates → Query invalidation → UI updates
+5. __Search__: Navbar input → API searches → Multiple data sources → Results display
 
 ---
 
@@ -480,11 +437,10 @@ fetchBatchProfiles(posts.map(p => p.user_id))
 1. **Authentication**: Middleware → Supabase Auth → Profile Check → Onboarding
 2. **Posts**: User creates → API validates → Database stores → Feed displays
 3. **Views**: Post loads → API records view → Database tracks → UI shows indicators
-4. **Charts**: Component requests → Cache checks → Yahoo API → Transform → Display
-5. **Voting**: User votes → API updates → Query invalidation → UI updates
-6. **Search**: Navbar input → API searches → Multiple data sources → Results display
-7. **Images**: Intersection observer → Lazy load → Smooth transitions
-8. **Errors**: Component errors → Error boundary → Graceful fallback
+4. **Voting**: User votes → API updates → Query invalidation → UI updates
+5. **Search**: Navbar input → API searches → Multiple data sources → Results display
+6. **Images**: Intersection observer → Lazy load → Smooth transitions
+7. **Errors**: Component errors → Error boundary → Graceful fallback
 
 ### 🎯 **Error Handling Strategy**
 
@@ -523,4 +479,4 @@ fetchBatchProfiles(posts.map(p => p.user_id))
 - **Profile Data**: Single query instead of multiple requests
 - **Error Handling**: Graceful degradation instead of full failures
 
-This documentation provides a complete understanding of how all components work together in the Prospect.money social trading platform, including all implemented performance optimizations and improvements.
+This documentation provides a complete understanding of how all components work together in the Prospect.money discussion platform, including all implemented performance optimizations and improvements.

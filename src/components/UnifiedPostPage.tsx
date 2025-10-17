@@ -3,6 +3,7 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabaseClient";
+import { addIndexedFilter } from "@/lib/pagination";
 import Sidebar from "@/components/Sidebar";
 import Navbar from "@/components/Navbar";
 import { GridBackground } from "@/components/GridBackground";
@@ -11,7 +12,6 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { BarChart3, MessageSquare, Users, TrendingUp, ArrowLeft, ThumbsUp, ThumbsDown, Heart } from "lucide-react";
 import Link from "next/link";
-import { PolygonChart } from "@/components/PolygonChart";
 import { DiscussionVotes } from "@/components/discussions/DiscussionVotes";
 import { CommentVote } from "@/components/discussions/CommentVote";
 import { DiscussionComments } from "@/components/discussions/DiscussionComments";
@@ -47,25 +47,32 @@ export function UnifiedPostPage({
     }
   }, [resolvedParams?.postid]);
 
-  // Fetch the specific discussion/post
+  // Fetch the specific discussion/post with indexed filters
   const { data: discussion, isLoading, error } = useQuery({
     queryKey: ["discussion", resolvedParams?.postid],
     queryFn: async () => {
       if (!resolvedParams?.postid) return null;
 
-      const { data, error } = await supabase
+      // Use indexed filter for discussion lookup (using id as primary key)
+      let query = supabase
         .from("discussions")
-        .select("id, title, content, category, created_at, upvotes, downvotes, views, comment_count, user_id, main_category, image_url")
-        .eq("id", resolvedParams.postid)
-        .single();
+        .select("id, title, content, category, created_at, upvotes, downvotes, views, comment_count, user_id, main_category, image_url");
+
+      // Apply indexed filter for discussion ID
+      query = addIndexedFilter(query, 'discussions', { id: resolvedParams.postid });
+
+      const { data, error } = await query.single();
 
       if (error) throw error;
 
-      const { data: profile } = await supabase
+      // Use indexed filter for profile lookup
+      let profileQuery = supabase
         .from("profiles")
-        .select("username, display_name, avatar_url")
-        .eq("id", data.user_id)
-        .single();
+        .select("username, display_name, avatar_url");
+
+      profileQuery = addIndexedFilter(profileQuery, 'profiles', { user_id: data.user_id });
+
+      const { data: profile } = await profileQuery.single();
 
       return {
         ...data,

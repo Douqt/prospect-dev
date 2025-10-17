@@ -1,5 +1,6 @@
 import { createServerClient } from '@/lib/supabase-server';
 import { NextRequest, NextResponse } from 'next/server';
+import { addIndexedFilter } from '@/lib/pagination';
 
 export async function POST(request: NextRequest) {
   try {
@@ -16,12 +17,14 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // Batch query for viewed status
-    const { data: viewedPosts, error: viewError } = await supabase
+    // Batch query for viewed status with indexed filter
+    let viewQuery = supabase
       .from('user_post_views')
-      .select('post_id')
-      .eq('user_id', user.id)
-      .in('post_id', postIds);
+      .select('post_id');
+
+    viewQuery = addIndexedFilter(viewQuery, 'user_post_views', { user_id: user.id });
+
+    const { data: viewedPosts, error: viewError } = await viewQuery.in('post_id', postIds);
 
     if (viewError) {
       console.error('Error batch checking view status:', viewError);

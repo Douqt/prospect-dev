@@ -1,5 +1,6 @@
 import { createServerClient } from '@/lib/supabase-server';
 import { NextRequest, NextResponse } from 'next/server';
+import { addIndexedFilter } from '@/lib/pagination';
 
 export async function POST(
   request: NextRequest,
@@ -15,12 +16,14 @@ export async function POST(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // 1. Check if post exists
-    const { data: post, error: postError } = await supabase
-    .from('discussions')
-    .select('id, views')
-    .eq('id', postId)
-    .single();
+    // 1. Check if post exists with indexed filter
+    let postQuery = supabase
+      .from('discussions')
+      .select('id, views');
+
+    postQuery = addIndexedFilter(postQuery, 'discussions', { id: postId });
+
+    const { data: post, error: postError } = await postQuery.single();
 
     if (postError || !post) {
     return NextResponse.json({ error: 'Post not found' }, { status: 404 });

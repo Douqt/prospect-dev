@@ -1,5 +1,6 @@
 import { createServerClient } from '@/lib/supabase-server';
 import { NextResponse } from 'next/server';
+import { addIndexedFilter } from '@/lib/pagination';
 
 // API endpoint to get top communities based on weighted score
 export async function GET(request: Request) {
@@ -65,37 +66,15 @@ export async function GET(request: Request) {
       .sort((a, b) => b.score - a.score)
       .slice(0, limit);
 
-    // Get price data for top communities
-    const results = await Promise.all(
-      communitiesWithScores.map(async (community) => {
-        try {
-          const response = await fetch(`${request.headers.get('origin') || 'http://localhost:3000'}/api/forum-stats?symbol=${community.community_symbol}`);
-          if (response.ok) {
-            const stats = await response.json();
-            return {
-              symbol: community.community_symbol,
-              score: community.score,
-              ...stats
-            };
-          }
-        } catch (error) {
-          console.error(`Error fetching stats for ${community.community_symbol}:`, error);
-        }
-
-        // Return basic info if price fetch fails
-        return {
-          symbol: community.community_symbol,
-          score: community.score,
-          price: "N/A",
-          change: "N/A",
-          changeColor: "text-gray-600",
-          posts: community.posts.toString(),
-          members: community.members >= 1000000 ? `${(community.members / 1000000).toFixed(1)}M` :
-                   community.members >= 1000 ? `${(community.members / 1000).toFixed(1)}K` :
-                   community.members.toString()
-        };
-      })
-    );
+    // Return community data without price information
+    const results = communitiesWithScores.map((community) => ({
+      symbol: community.community_symbol,
+      score: community.score,
+      posts: community.posts.toString(),
+      members: community.members >= 1000000 ? `${(community.members / 1000000).toFixed(1)}M` :
+               community.members >= 1000 ? `${(community.members / 1000).toFixed(1)}K` :
+               community.members.toString()
+    }));
 
     return NextResponse.json(results);
   } catch (error) {

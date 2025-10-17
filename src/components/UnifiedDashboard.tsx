@@ -3,10 +3,10 @@
 import { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabaseClient";
+import { buildCursorQuery, addIndexedFilter } from "@/lib/pagination";
 import Sidebar from "@/components/Sidebar";
 import Navbar from "@/components/Navbar";
-import { PolygonChart } from "@/components/PolygonChart";
-import { fetchMultiplePolygonData } from "@/lib/polygon-cache";
+
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -75,22 +75,7 @@ export function UnifiedDashboard({
   const router = useRouter();
   const [feedType, setFeedType] = useState<'for-you' | 'following'>('for-you');
 
-  // Preload charts for feed optimization
-  useEffect(() => {
-    const preloadCharts = async () => {
-      try {
-        console.log(`🔥 Preloading charts for ${forumType} feed symbols...`);
-        await fetchMultiplePolygonData(preloadSymbols, '1m', 6);
-        console.log('✅ Feed charts preloaded');
-      } catch (error) {
-        console.warn('⚠️ Chart preload warning (non-blocking):', error);
-      }
-    };
 
-    if (preloadSymbols.length > 0) {
-      preloadCharts();
-    }
-  }, [preloadSymbols, forumType]);
 
   // Fetch top community stats based on weighted score
   const { data: topCommunitiesData, isLoading: topCommunitiesLoading } = useQuery({
@@ -136,22 +121,31 @@ export function UnifiedDashboard({
       const { data: { user } } = await supabase.auth.getUser();
 
       if (feedType === 'following' && user) {
-        const { data: followingData, error: followError } = await supabase
+        // Use indexed filter for community memberships
+        let membershipQuery = supabase
           .from("community_memberships")
-          .select("community_symbol")
-          .eq("user_id", user.id);
+          .select("community_symbol");
+
+        membershipQuery = addIndexedFilter(membershipQuery, 'community_memberships', { user_id: user.id });
+
+        const { data: followingData, error: followError } = await membershipQuery;
 
         if (followError) return [];
 
         const followedForums = followingData?.map(f => f.community_symbol.toLowerCase()) || [];
         if (followedForums.length === 0) return [];
 
-        const { data, error } = await supabase
+        // Use indexed filter for discussions in followed forums
+        let discussionsQuery = supabase
           .from("discussions")
-          .select("id, title, content, category, created_at, upvotes, downvotes, views, comment_count, user_id, image_url")
-          .in("category", followedForums)
-          .order("created_at", { ascending: false })
-          .limit(20);
+          .select("id, title, content, category, created_at, upvotes, downvotes, views, comment_count, user_id, image_url");
+
+        discussionsQuery = addIndexedFilter(discussionsQuery, 'discussions', { category: followedForums });
+
+        // Apply cursor-based pagination
+        discussionsQuery = buildCursorQuery(discussionsQuery, { limit: 20 });
+
+        const { data, error } = await discussionsQuery;
 
         if (error) throw error;
 
@@ -160,11 +154,14 @@ export function UnifiedDashboard({
 
         const discussionsWithProfiles = await Promise.all(
           filteredDiscussions.map(async (discussion) => {
-            const { data: profile } = await supabase
+            // Use indexed filter for profile lookup
+            let profileQuery = supabase
               .from("profiles")
-              .select("username, display_name, avatar_url")
-              .eq("id", discussion.user_id)
-              .single();
+              .select("username, display_name, avatar_url");
+
+            profileQuery = addIndexedFilter(profileQuery, 'profiles', { user_id: discussion.user_id });
+
+            const { data: profile } = await profileQuery.single();
 
             return {
               ...discussion,
@@ -176,11 +173,15 @@ export function UnifiedDashboard({
 
         return discussionsWithProfiles as Discussion[];
       } else {
-        const { data, error } = await supabase
+        // Use cursor-based pagination for main feed
+        let discussionsQuery = supabase
           .from("discussions")
-          .select("id, title, content, category, created_at, upvotes, downvotes, views, comment_count, user_id, image_url")
-          .order("created_at", { ascending: false })
-          .limit(20);
+          .select("id, title, content, category, created_at, upvotes, downvotes, views, comment_count, user_id, image_url");
+
+        // Apply cursor-based pagination
+        discussionsQuery = buildCursorQuery(discussionsQuery, { limit: 20 });
+
+        const { data, error } = await discussionsQuery;
 
         if (error) throw error;
 
@@ -189,11 +190,14 @@ export function UnifiedDashboard({
 
         const discussionsWithProfiles = await Promise.all(
           filteredDiscussions.map(async (discussion) => {
-            const { data: profile } = await supabase
+            // Use indexed filter for profile lookup
+            let profileQuery = supabase
               .from("profiles")
-              .select("username, display_name, avatar_url")
-              .eq("id", discussion.user_id)
-              .single();
+              .select("username, display_name, avatar_url");
+
+            profileQuery = addIndexedFilter(profileQuery, 'profiles', { user_id: discussion.user_id });
+
+            const { data: profile } = await profileQuery.single();
 
             return {
               ...discussion,
@@ -312,102 +316,79 @@ export function UnifiedDashboard({
                       onClick={() => router.push(`${getRouterPath(discussion.category)}/${discussion.category.toLowerCase()}/${discussion.id}`)}
                     >
                       <CardContent className="p-6">
-                        <div className="flex gap-6 hover:pointer-events-auto">
-                          {/* Post Content - Left Side */}
-                          <div className="flex-1">
-                            {/* User Info */}
-                            <div className="flex items-center gap-3 mb-3" onClick={(e) => e.stopPropagation()}>
-                              <Link href={`/profile/${discussion.profiles?.username || ''}`}>
-                                <div className="w-10 h-10 rounded-full overflow-hidden flex items-center justify-center bg-[e0a815] cursor-pointer hover:opacity-80 transition-opacity">
-                                  {discussion.profiles?.avatar_url ? (
-                                    <img
-                                      src={discussion.profiles.avatar_url}
-                                      alt={`${discussion.profiles?.display_name || discussion.profiles?.username || 'Trader'} avatar`}
-                                      className="w-full h-full object-cover"
-                                    />
-                                  ) : (
-                                    <span className="text-white text-sm font-semibold">
-                                      {discussion.profiles?.display_name?.charAt(0)?.toUpperCase() ??
-                                       discussion.profiles?.username?.charAt(0)?.toUpperCase() ??
-                                       'T'}
-                                    </span>
-                                  )}
-                                </div>
-                              </Link>
-                              <div>
-                                <Link href={`/profile/${discussion.profiles?.username || ''}`}>
-                                  <p className="font-semibold text-sm cursor-pointer hover:text-[#e0a815] transition-colors">
-                                    {discussion.profiles?.display_name ?? discussion.profiles?.username ?? 'Trader'}
-                                  </p>
-                                </Link>
-                                <Link href={`${getRouterPath(discussion.category)}/${discussion.category.toLowerCase()}`}>
-                                  <span className="cursor-pointer text-xs px-2 py-1 bg-muted rounded-md hover:bg-muted/80 transition-colors">
-                                    {discussion.category.toUpperCase()}
-                                  </span>
-                                </Link>
-                              </div>
+                        {/* User Info */}
+                        <div className="flex items-center gap-3 mb-3" onClick={(e) => e.stopPropagation()}>
+                          <Link href={`/profile/${discussion.profiles?.username || ''}`}>
+                            <div className="w-10 h-10 rounded-full overflow-hidden flex items-center justify-center bg-[e0a815] cursor-pointer hover:opacity-80 transition-opacity">
+                              {discussion.profiles?.avatar_url ? (
+                                <img
+                                  src={discussion.profiles.avatar_url}
+                                  alt={`${discussion.profiles?.display_name || discussion.profiles?.username || 'Trader'} avatar`}
+                                  className="w-full h-full object-cover"
+                                />
+                              ) : (
+                                <span className="text-white text-sm font-semibold">
+                                  {discussion.profiles?.display_name?.charAt(0)?.toUpperCase() ??
+                                   discussion.profiles?.username?.charAt(0)?.toUpperCase() ??
+                                   'T'}
+                                </span>
+                              )}
                             </div>
-
-                            {/* Post Content */}
-                            <div className="mb-4">
-                              <Link href={`${getRouterPath(discussion.category)}/${discussion.category.toLowerCase()}/${discussion.id}`}>
-                                <h3 className="font-semibold text-lg mb-2 hover:text-[#e0a815] transition-colors cursor-pointer">
-                                  {discussion.title}
-                                </h3>
-                              </Link>
-                              <div className="text-muted-foreground mb-3">
-                                {discussion.image_url && (
-                                  <div className="mb-3">
-                                    <LazyImage
-                                      src={discussion.image_url}
-                                      alt="Post image"
-                                      className="rounded-lg max-w-full h-auto max-h-96 object-cover"
-                                      placeholder="blur"
-                                    />
-                                  </div>
-                                )}
-                                {discussion.content.split('\n').map((paragraph, index) => (
-                                  paragraph.trim() ? (
-                                    <p key={index} className="mb-2 last:mb-0">{paragraph}</p>
-                                  ) : null
-                                ))}
-                              </div>
-                            </div>
-
-                            {/* Engagement Stats */}
-                            <div className="flex items-center gap-6">
-                              <button className="flex items-center gap-2 text-sm text-muted-foreground hover:text-blue-600 transition-colors">
-                                <MessageSquare className="w-4 h-4" />
-                                {discussion.comment_count}
-                              </button>
-                              <button className="flex items-center gap-2 text-sm text-muted-foreground hover:text-green-600 transition-colors">
-                                <TrendingUp className="w-4 h-4" />
-                                {discussion.views}
-                              </button>
-                              <button className="flex items-center gap-2 text-sm text-muted-foreground hover:text-red-500 transition-colors">
-                                <Heart className="w-4 h-4" />
-                                {discussion.upvotes - discussion.downvotes}
-                              </button>
-                            </div>
+                          </Link>
+                          <div>
+                            <Link href={`/profile/${discussion.profiles?.username || ''}`}>
+                              <p className="font-semibold text-sm cursor-pointer hover:text-[#e0a815] transition-colors">
+                                {discussion.profiles?.display_name ?? discussion.profiles?.username ?? 'Trader'}
+                              </p>
+                            </Link>
+                            <Link href={`${getRouterPath(discussion.category)}/${discussion.category.toLowerCase()}`}>
+                              <span className="cursor-pointer text-xs px-2 py-1 bg-muted rounded-md hover:bg-muted/80 transition-colors">
+                                {discussion.category.toUpperCase()}
+                              </span>
+                            </Link>
                           </div>
+                        </div>
 
-                          {/* Chart - Right Side */}
-                          <div className="chart flex-none w-80 relative z-10 pointer-events-auto" onClick={(e) => e.stopPropagation()}>
-                            <Card className="p-3 pointer-events-auto">
-                              <div className="text-center mb-2">
-                                <h4 className="font-semibold text-xs text-muted-foreground">
-                                  {discussion.category.toUpperCase()} Chart
-                                </h4>
-                              </div>
-                              <div className="h-40 overflow-hidden">
-                                <PolygonChart
-                                  symbol={discussion.category.toUpperCase()}
-                                  symbols={filteredDiscussions.map(d => d.category.toUpperCase())}
-                                  enableBatchLoading={true}
+                        {/* Post Content */}
+                        <div className="mb-4">
+                          <Link href={`${getRouterPath(discussion.category)}/${discussion.category.toLowerCase()}/${discussion.id}`}>
+                            <h3 className="font-semibold text-lg mb-2 hover:text-[#e0a815] transition-colors cursor-pointer">
+                              {discussion.title}
+                            </h3>
+                          </Link>
+                          <div className="text-muted-foreground mb-3">
+                            {discussion.image_url && (
+                              <div className="mb-3">
+                                <LazyImage
+                                  src={discussion.image_url}
+                                  alt="Post image"
+                                  className="rounded-lg max-w-full h-auto max-h-96 object-cover"
+                                  placeholder="blur"
                                 />
                               </div>
-                            </Card>
+                            )}
+                            {discussion.content.split('\n').map((paragraph, index) => (
+                              paragraph.trim() ? (
+                                <p key={index} className="mb-2 last:mb-0">{paragraph}</p>
+                              ) : null
+                            ))}
                           </div>
+                        </div>
+
+                        {/* Engagement Stats */}
+                        <div className="flex items-center gap-6">
+                          <button className="flex items-center gap-2 text-sm text-muted-foreground hover:text-blue-600 transition-colors">
+                            <MessageSquare className="w-4 h-4" />
+                            {discussion.comment_count}
+                          </button>
+                          <button className="flex items-center gap-2 text-sm text-muted-foreground hover:text-green-600 transition-colors">
+                            <TrendingUp className="w-4 h-4" />
+                            {discussion.views}
+                          </button>
+                          <button className="flex items-center gap-2 text-sm text-muted-foreground hover:text-red-500 transition-colors">
+                            <Heart className="w-4 h-4" />
+                            {discussion.upvotes - discussion.downvotes}
+                          </button>
                         </div>
                       </CardContent>
                     </Card>
@@ -439,9 +420,7 @@ export function UnifiedDashboard({
                   topSymbols.map((symbol) => (
                     <Card key={symbol} className="text-center opacity-50">
                       <CardContent className="p-4">
-                        <div className="text-2xl font-bold text-[#e0a815]">Loading...</div>
-                        <div className="text-sm text-muted-foreground">{symbol} Price</div>
-                        <div className="text-gray-600 text-sm">Loading...</div>
+                        <div className="text-lg font-bold text-muted-foreground">{symbol}</div>
                         <div className="text-xs text-muted-foreground mt-1">Loading members • Loading posts</div>
                       </CardContent>
                     </Card>
@@ -450,9 +429,7 @@ export function UnifiedDashboard({
                   topCommunitiesData?.map((community) => (
                     <Card key={community.symbol} className="text-center">
                       <CardContent className="p-4">
-                        <div className="text-2xl font-bold text-[#e0a815]">{community.price}</div>
-                        <div className="text-sm text-muted-foreground">{community.symbol} Price</div>
-                        <div className={`${community.changeColor} text-sm`}>{community.change}</div>
+                        <div className="text-lg font-bold text-[#e0a815]">{community.symbol}</div>
                         <div className="text-xs text-muted-foreground mt-1">{community.members} members • {community.posts} posts</div>
                       </CardContent>
                     </Card>
