@@ -1,6 +1,6 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabaseClient";
 import { buildCursorQuery, addIndexedFilter } from "@/lib/pagination";
 import { Button } from "@/components/ui/button";
@@ -34,9 +34,11 @@ interface Comment {
 
 interface DiscussionCommentsProps {
   discussionId: string;
+  onCommentCountChange?: () => void;
 }
 
-export function DiscussionComments({ discussionId }: DiscussionCommentsProps) {
+export function DiscussionComments({ discussionId, onCommentCountChange }: DiscussionCommentsProps) {
+  const queryClient = useQueryClient();
   const [newComment, setNewComment] = useState("");
   const [currentUser, setCurrentUser] = useState<string | null>(null);
   const { profile } = useProfile(currentUser || undefined);
@@ -94,8 +96,8 @@ export function DiscussionComments({ discussionId }: DiscussionCommentsProps) {
         ...comment,
         _count: {
           votes: {
-            up: comment.upvotes,
-            down: comment.downvotes
+            up: comment.upvotes || 0,
+            down: comment.downvotes || 0
           }
         }
       })) as Comment[];
@@ -121,8 +123,18 @@ export function DiscussionComments({ discussionId }: DiscussionCommentsProps) {
       return;
     }
 
+    // Use RPC function to increment comment count
+    try {
+      await supabase.rpc('increment_comment_count', {
+        p_discussion_id: discussionId
+      });
+    } catch (rpcError) {
+      console.error("Error incrementing comment count:", rpcError);
+    }
+
     setNewComment("");
     refetch();
+    onCommentCountChange?.();
   };
 
   if (isLoading) {
@@ -145,7 +157,11 @@ export function DiscussionComments({ discussionId }: DiscussionCommentsProps) {
     <div className="mt-4 space-y-4">
       {comments && comments.length > 0 ? (
         comments.map((comment) => (
-          <CommentItem key={comment.id} comment={comment} onVoteChange={() => refetch()} />
+          <CommentItem key={comment.id} comment={comment} onVoteChange={() => {
+            refetch();
+            // Also invalidate comment vote queries to ensure they refetch if needed
+            queryClient.invalidateQueries({ queryKey: ["comment-user-vote"] });
+          }} />
         ))
       ) : (
         <div className="text-sm text-muted-foreground">No comments yet.</div>

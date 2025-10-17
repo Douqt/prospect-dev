@@ -26,77 +26,152 @@ export function DiscussionVotes({
   // Get user's current vote with indexed filter
   const { data: userVote } = useQuery({
     queryKey: ["user-vote", discussionId],
-    queryFn: async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return null;
+    queryFn: async (): Promise<"up" | "down" | null> => {
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) return null;
 
-      // Use indexed filter for discussion vote lookup
-      let query = supabase
-        .from("discussion_votes")
-        .select("vote_type");
+        console.log(`Fetching vote for discussion ${discussionId} by user ${user.id}`);
 
-      // Apply indexed filters for discussion_id and user_id
-      query = addIndexedFilter(query, 'discussion_votes', {
-        discussion_id: discussionId,
-        user_id: user.id
-      });
+        // Try direct query first (simpler approach)
+        const { data, error } = await supabase
+          .from("discussion_votes")
+          .select("vote_type")
+          .eq("discussion_id", discussionId)
+          .eq("user_id", user.id)
+          .single();
 
-      const { data, error } = await query.single();
+        if (error) {
+          if (error.code === "PGRST116") {
+            // No rows found - user hasn't voted
+            console.log(`No vote found for discussion ${discussionId}`);
+            return null;
+          } else {
+            console.error("Error fetching discussion vote:", error);
+            return null;
+          }
+        }
 
-      if (error && error.code !== "PGRST116") throw error; // PGRST116 = no rows
-      return data?.vote_type || null;
+        console.log(`Found vote for discussion ${discussionId}:`, data?.vote_type);
+        return (data?.vote_type as "up" | "down") || null;
+      } catch (error) {
+        console.error("Error in discussion vote query:", error);
+        return null;
+      }
     },
-    enabled: !!discussionId
+    enabled: !!discussionId,
+    staleTime: 0, // Always fetch fresh data
+    gcTime: 1000 * 60 * 5, // Cache for 5 minutes
+    refetchOnMount: true, // Always refetch when component mounts
+    refetchOnWindowFocus: false,
+    retry: false // Disable retry to avoid spam
   });
 
   useEffect(() => {
-    if (userVote) {
+    if (userVote !== undefined) {
       setCurrentVote(userVote);
     }
   }, [userVote]);
+
+  // Debug logging for vote state
+  useEffect(() => {
+    console.log(`Discussion ${discussionId} - Current vote state:`, {
+      userVote,
+      currentVote,
+      upvotes: initialUpvotes,
+      downvotes: initialDownvotes
+    });
+  }, [userVote, currentVote, discussionId, initialUpvotes, initialDownvotes]);
 
   const voteMutation = useMutation({
     mutationFn: async (voteType: "up" | "down") => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("Must be logged in to vote");
 
-      const { data: existingVote } = await supabase
+      const { data: existingVote, error: existingVoteError } = await supabase
         .from("discussion_votes")
         .select("vote_type")
         .eq("discussion_id", discussionId)
         .eq("user_id", user.id)
         .single();
 
+      if (existingVoteError && existingVoteError.code !== "PGRST116") {
+        console.error("Error checking existing vote:", existingVoteError);
+        throw existingVoteError;
+      }
+
+      // First, get the current discussion to ensure we have the latest vote counts
+      const { data: currentDiscussion, error: fetchError } = await supabase
+        .from("discussions")
+        .select("upvotes, downvotes")
+        .eq("id", discussionId)
+        .single();
+
+      if (fetchError) throw fetchError;
+
+      const currentUpvotes = currentDiscussion?.upvotes || 0;
+      const currentDownvotes = currentDiscussion?.downvotes || 0;
+
       if (existingVote) {
         // Remove existing vote
         if (existingVote.vote_type === voteType) {
-          const { error } = await supabase
+          const { error: deleteError } = await supabase
             .from("discussion_votes")
             .delete()
             .eq("discussion_id", discussionId)
             .eq("user_id", user.id);
-          if (error) throw error;
+          if (deleteError) throw deleteError;
+
+          // Use RPC function to update vote counts
+          const { error: updateError } = await supabase.rpc('decrement_discussion_vote_count', {
+            p_discussion_id: discussionId,
+            p_vote_type: voteType
+          });
+          if (updateError) throw updateError;
+
           return { action: "remove", prevVote: voteType };
         } else {
           // Switch vote
-          const { error } = await supabase
+          const { error: updateVoteError } = await supabase
             .from("discussion_votes")
             .update({ vote_type: voteType })
             .eq("discussion_id", discussionId)
             .eq("user_id", user.id);
-          if (error) throw error;
+          if (updateVoteError) throw updateVoteError;
+
+          // Use RPC functions to update vote counts
+          const { error: decrementError } = await supabase.rpc('decrement_discussion_vote_count', {
+            p_discussion_id: discussionId,
+            p_vote_type: existingVote.vote_type
+          });
+          if (decrementError) throw decrementError;
+
+          const { error: incrementError } = await supabase.rpc('increment_discussion_vote_count', {
+            p_discussion_id: discussionId,
+            p_vote_type: voteType
+          });
+          if (incrementError) throw incrementError;
+
           return { action: "switch", prevVote: existingVote.vote_type, newVote: voteType };
         }
       } else {
         // Add new vote
-        const { error } = await supabase
+        const { error: insertError } = await supabase
           .from("discussion_votes")
           .insert({
             discussion_id: discussionId,
             user_id: user.id,
             vote_type: voteType
           });
-        if (error) throw error;
+        if (insertError) throw insertError;
+
+        // Use RPC function to update vote counts
+        const { error: updateError } = await supabase.rpc('increment_discussion_vote_count', {
+          p_discussion_id: discussionId,
+          p_vote_type: voteType
+        });
+        if (updateError) throw updateError;
+
         return { action: "add", newVote: voteType };
       }
     },

@@ -37,7 +37,7 @@ export async function GET(request: Request) {
         // Count posts from discussions table with indexed filter
         let postsQuery = supabase
           .from('discussions')
-          .select('id', { count: 'exact' });
+          .select('*', { count: 'exact', head: true });
 
         postsQuery = addIndexedFilter(postsQuery, 'discussions', { category: symbol.toLowerCase() });
 

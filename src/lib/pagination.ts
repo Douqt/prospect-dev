@@ -50,6 +50,9 @@ export function addIndexedFilter(
 ) {
   // For discussions table (equivalent to posts)
   if (tableName === 'discussions') {
+    if (filters.id) {
+      query = query.eq('id', filters.id);
+    }
     if (filters.author_id) {
       query = query.eq('user_id', filters.author_id);
     }
@@ -88,6 +91,16 @@ export function addIndexedFilter(
     }
     if (filters.community_symbol) {
       query = query.eq('community_symbol', filters.community_symbol);
+    }
+  }
+
+  // For user_post_views table
+  if (tableName === 'user_post_views') {
+    if (filters.user_id) {
+      query = query.eq('user_id', filters.user_id);
+    }
+    if (filters.post_id) {
+      query = query.eq('post_id', filters.post_id);
     }
   }
 

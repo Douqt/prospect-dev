@@ -31,7 +31,7 @@ export async function GET(request: Request) {
 
     profileQuery = addIndexedFilter(profileQuery, 'profiles', { user_id: userId });
 
-    const { data: profile, error } = await profileQuery.single()
+    const { data: profile, error } = await profileQuery.single();
 
     if (error) {
       console.error('Profile fetch error:', error)

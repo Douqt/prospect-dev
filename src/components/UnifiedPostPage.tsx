@@ -272,7 +272,10 @@ export function UnifiedPostPage({
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <DiscussionComments discussionId={discussion.id} />
+              <DiscussionComments
+                discussionId={discussion.id}
+                onCommentCountChange={() => queryClient.invalidateQueries({ queryKey: ["discussion", resolvedParams?.postid] })}
+              />
             </CardContent>
           </Card>
         </div>

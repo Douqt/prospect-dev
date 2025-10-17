@@ -19,7 +19,7 @@ export async function POST(
     // 1. Check if post exists with indexed filter
     let postQuery = supabase
       .from('discussions')
-      .select('id, views');
+      .select('id, views, user_id');
 
     postQuery = addIndexedFilter(postQuery, 'discussions', { id: postId });
 

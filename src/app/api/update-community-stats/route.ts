@@ -40,7 +40,7 @@ export async function POST(request: Request) {
     // For post count, we'll need to count from discussions with indexed filter
     let postsQuery = supabase
       .from('discussions')
-      .select('id', { count: 'exact' });
+      .select('*', { count: 'exact', head: true });
 
     postsQuery = addIndexedFilter(postsQuery, 'discussions', { category: community_symbol.toLowerCase() });
 
