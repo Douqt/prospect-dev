@@ -6,7 +6,7 @@ import { supabase } from "@/lib/supabaseClient";
 import { buildCursorQuery, addIndexedFilter } from "@/lib/pagination";
 import Sidebar from "@/components/Sidebar";
 import Navbar from "@/components/Navbar";
-import { GridBackground } from "@/components/GridBackground";
+
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -342,7 +342,13 @@ export function UnifiedForumPage({
     return (
       <div className="min-h-screen bg-background relative overflow-hidden text-foreground">
         <Sidebar />
-        <GridBackground />
+      <div
+        className="absolute inset-0 z-0 pointer-events-none"
+        style={{
+          backgroundImage: `linear-gradient(to right, rgba(128, 128, 128, 0.1) 1px, transparent 1px), linear-gradient(to bottom, rgba(128, 128, 128, 0.1) 1px, transparent 1px)`,
+          backgroundSize: "100px 100px",
+        }}
+      />
         <Navbar />
         <main className="relative z-10 pt-24 ml-[300px]">
           <div className="flex max-w-7xl mx-auto px-6">
@@ -360,7 +366,6 @@ export function UnifiedForumPage({
   return (
     <div className="min-h-screen bg-background relative overflow-hidden text-foreground">
       <Sidebar />
-      <GridBackground />
       <Navbar />
 
       <div className="flex">

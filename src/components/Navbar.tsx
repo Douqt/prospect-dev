@@ -6,7 +6,7 @@ import { timeAgo } from "../lib/time";
 import { useTheme } from "@/hooks/useTheme";
 import { Search, X } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { STOCK_FORUMS, FUTURES_FORUMS } from "../../forum-categories";
+import { STOCK_FORUMS, FUTURES_FORUMS, isStockForum, isCryptoForum, isFuturesForum, isGeneralForum } from "../../forum-categories";
 import { CRYPTO_FORUMS } from "@/lib/cryptoForums";
 
 interface SearchResult {
@@ -370,7 +370,7 @@ export default function NavBar() {
       const postLimit = Math.max(3, resultsPerPage - matchingStockForums.length - matchingCryptoForums.length - matchingFuturesForums.length);
       const { data: postResults, error: postError } = await supabase
         .from('discussions')
-        .select('id, title, category, created_at, main_category')
+        .select('id, title, category, created_at')
         .or(`title.ilike.%${query}%,content.ilike.%${query}%`)
         .order('created_at', { ascending: false })
         .limit(postLimit * 2); // Get more posts to allow for relevance filtering
@@ -391,15 +391,32 @@ export default function NavBar() {
         const categoryScore = calculateRelevance(p.category, query);
         const relevance = Math.max(titleScore, categoryScore);
 
+        // Determine forum type and URL based on category using helper functions
+        let forumType = '';
         let forumTypeLabel = '';
-        if (p.main_category === 'stocks') {
+        let url = '';
+
+        if (isStockForum(p.category)) {
+          forumType = 'stocks';
           forumTypeLabel = 'Stock Forum';
-        } else if (p.main_category === 'crypto') {
+          url = `/stocks/${p.category.toLowerCase()}/${p.id}`;
+        } else if (isCryptoForum(p.category)) {
+          forumType = 'crypto';
           forumTypeLabel = 'Crypto Forum';
-        } else if (p.main_category === 'futures') {
+          url = `/crypto/${p.category.toLowerCase()}/${p.id}`;
+        } else if (isFuturesForum(p.category)) {
+          forumType = 'futures';
           forumTypeLabel = 'Futures Forum';
+          url = `/futures/${p.category.toLowerCase()}/${p.id}`;
+        } else if (isGeneralForum(p.category)) {
+          forumType = 'general';
+          forumTypeLabel = 'General Forum';
+          url = `/general/${p.category.toLowerCase()}/${p.id}`;
         } else {
+          // Default fallback
+          forumType = 'stocks';
           forumTypeLabel = 'Forum';
+          url = `/stocks/${p.category.toLowerCase()}/${p.id}`;
         }
 
         return {
@@ -407,7 +424,7 @@ export default function NavBar() {
           relevance,
           title: p.title,
           subtitle: `Post • ${p.category.toUpperCase()} ${forumTypeLabel} • ${new Date(p.created_at).toLocaleDateString()}`,
-          url: `/${p.main_category}/${p.category.toLowerCase()}/${p.id}`
+          url: url
         };
       })
       .filter(item => item.relevance > 0)
@@ -519,7 +536,7 @@ export default function NavBar() {
       // Search only posts (Reddit style)
       const { data: postResults, error: postError } = await supabase
         .from('discussions')
-        .select('id, title, category, created_at, main_category')
+        .select('id, title, category, created_at')
         .or(`title.ilike.%${query}%,content.ilike.%${query}%`)
         .order('created_at', { ascending: false })
         .limit(15); // Show more posts in Reddit style
@@ -534,15 +551,32 @@ export default function NavBar() {
         const categoryScore = calculateRelevance(p.category, query);
         const relevance = Math.max(titleScore, categoryScore);
 
+        // Determine forum type and URL based on category using helper functions
+        let forumType = '';
         let forumTypeLabel = '';
-        if (p.main_category === 'stocks') {
+        let url = '';
+
+        if (isStockForum(p.category)) {
+          forumType = 'stocks';
           forumTypeLabel = 'Stock Forum';
-        } else if (p.main_category === 'crypto') {
+          url = `/stocks/${p.category.toLowerCase()}/${p.id}`;
+        } else if (isCryptoForum(p.category)) {
+          forumType = 'crypto';
           forumTypeLabel = 'Crypto Forum';
-        } else if (p.main_category === 'futures') {
+          url = `/crypto/${p.category.toLowerCase()}/${p.id}`;
+        } else if (isFuturesForum(p.category)) {
+          forumType = 'futures';
           forumTypeLabel = 'Futures Forum';
+          url = `/futures/${p.category.toLowerCase()}/${p.id}`;
+        } else if (isGeneralForum(p.category)) {
+          forumType = 'general';
+          forumTypeLabel = 'General Forum';
+          url = `/general/${p.category.toLowerCase()}/${p.id}`;
         } else {
+          // Default fallback
+          forumType = 'stocks';
           forumTypeLabel = 'Forum';
+          url = `/stocks/${p.category.toLowerCase()}/${p.id}`;
         }
 
         return {
@@ -550,7 +584,7 @@ export default function NavBar() {
           relevance,
           title: p.title,
           subtitle: `Post • ${p.category.toUpperCase()} ${forumTypeLabel} • ${new Date(p.created_at).toLocaleDateString()}`,
-          url: `/${p.main_category}/${p.category.toLowerCase()}/${p.id}`
+          url: url
         };
       })
       .filter(item => item.relevance > 0)
@@ -666,7 +700,7 @@ export default function NavBar() {
       dropdown.removeEventListener('mouseleave', handleMouseLeave);
       dropdown.removeEventListener('wheel', preventBodyScroll);
     };
-  }, [hasMoreResults, isLoadingMore, searchQuery]);
+  }, [hasMoreResults, isLoadingMore, searchQuery, loadMoreResults]);
 
   const handleSearchResultClick = (url: string) => {
     setSearchQuery("");

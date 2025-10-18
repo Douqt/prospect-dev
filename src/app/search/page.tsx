@@ -1,10 +1,10 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { supabase } from "../../lib/supabaseClient";
 import Link from "next/link";
 import { Search, X, ArrowLeft } from "lucide-react";
-import { STOCK_FORUMS, FUTURES_FORUMS } from "../../../forum-categories";
+import { STOCK_FORUMS, FUTURES_FORUMS, isStockForum, isCryptoForum, isFuturesForum, isGeneralForum } from "../../../forum-categories";
 import { CRYPTO_FORUMS } from "@/lib/cryptoForums";
 import Sidebar from "@/components/Sidebar";
 import Navbar from "@/components/Navbar";
@@ -16,6 +16,12 @@ interface SearchResult {
   subtitle: string;
   url: string;
   content?: string;
+  user?: {
+    id: string;
+    username: string;
+    display_name: string;
+    avatar_url?: string;
+  };
 }
 
 type SearchFilter = 'all' | 'posts' | 'communities' | 'comments';
@@ -81,7 +87,7 @@ export default function SearchPage() {
   };
 
   // Search function
-  const performSearch = async (query: string, filter: SearchFilter = 'all') => {
+  const performSearch = useCallback(async (query: string, filter: SearchFilter = 'all') => {
     if (!query.trim()) {
       setSearchResults([]);
       return;
@@ -93,7 +99,7 @@ export default function SearchPage() {
       const upperQuery = query.toUpperCase();
       const resultsPerPage = 20;
 
-      let allResults: SearchResult[] = [];
+      const allResults: SearchResult[] = [];
 
       // Get forums if requested
       if (filter === 'all' || filter === 'communities') {
@@ -183,7 +189,10 @@ export default function SearchPage() {
       if (filter === 'all' || filter === 'posts') {
         const { data: postResults, error: postError } = await supabase
           .from('discussions')
-          .select('id, title, category, created_at, main_category')
+          .select(`
+            id, title, category, created_at,
+            profiles!fk_discussions_user(id, username, display_name, avatar_url)
+          `)
           .or(`title.ilike.%${query}%,content.ilike.%${query}%`)
           .order('created_at', { ascending: false })
           .limit(resultsPerPage);
@@ -193,20 +202,37 @@ export default function SearchPage() {
         }
 
         // Convert post results to search results with relevance scoring
-        const scoredPosts = postResults?.map(p => {
+        const scoredPosts = postResults?.map((p: any) => {
           const titleScore = calculateRelevance(p.title, query);
           const categoryScore = calculateRelevance(p.category, query);
           const relevance = Math.max(titleScore, categoryScore);
 
+          // Determine forum type and URL based on category using helper functions
+          let forumType = '';
           let forumTypeLabel = '';
-          if (p.main_category === 'stocks') {
+          let url = '';
+
+          if (isStockForum(p.category)) {
+            forumType = 'stocks';
             forumTypeLabel = 'Stock Forum';
-          } else if (p.main_category === 'crypto') {
+            url = `/stocks/${p.category.toLowerCase()}/${p.id}`;
+          } else if (isCryptoForum(p.category)) {
+            forumType = 'crypto';
             forumTypeLabel = 'Crypto Forum';
-          } else if (p.main_category === 'futures') {
+            url = `/crypto/${p.category.toLowerCase()}/${p.id}`;
+          } else if (isFuturesForum(p.category)) {
+            forumType = 'futures';
             forumTypeLabel = 'Futures Forum';
+            url = `/futures/${p.category.toLowerCase()}/${p.id}`;
+          } else if (isGeneralForum(p.category)) {
+            forumType = 'general';
+            forumTypeLabel = 'General Forum';
+            url = `/general/${p.category.toLowerCase()}/${p.id}`;
           } else {
+            // Default fallback
+            forumType = 'stocks';
             forumTypeLabel = 'Forum';
+            url = `/stocks/${p.category.toLowerCase()}/${p.id}`;
           }
 
           return {
@@ -214,7 +240,13 @@ export default function SearchPage() {
             relevance,
             title: p.title,
             subtitle: `Post • ${p.category.toUpperCase()} ${forumTypeLabel} • ${new Date(p.created_at).toLocaleDateString()}`,
-            url: `/${p.main_category}/${p.category.toLowerCase()}/${p.id}`
+            url: url,
+            user: p.profiles ? {
+              id: p.profiles.id,
+              username: p.profiles.username,
+              display_name: p.profiles.display_name || p.profiles.username,
+              avatar_url: p.profiles.avatar_url
+            } : undefined
           };
         })
         .filter(item => item.relevance > 0)
@@ -225,7 +257,8 @@ export default function SearchPage() {
           id: item.post.id,
           title: item.title,
           subtitle: item.subtitle,
-          url: item.url
+          url: item.url,
+          user: item.user
         })) || [];
 
         allResults.push(...scoredPosts);
@@ -235,30 +268,69 @@ export default function SearchPage() {
       if (filter === 'all' || filter === 'comments') {
         const { data: commentResults, error: commentError } = await supabase
           .from('comments')
-          .select('id, content, discussion_id, created_at, discussions!inner(id, title, category, main_category)')
+          .select(`
+            id, content, discussion_id, created_at, user_id,
+            discussions!comments_discussion_id_fkey(id, title, category)
+          `)
           .ilike('content', `%${query}%`)
           .order('created_at', { ascending: false })
           .limit(resultsPerPage);
+
+        // If we have comments, fetch the profile information separately
+        let commentsWithProfiles = commentResults;
+        if (commentResults && commentResults.length > 0) {
+          const userIds = [...new Set(commentResults.map((c: any) => c.user_id).filter(Boolean))];
+
+          if (userIds.length > 0) {
+            const { data: profiles } = await supabase
+              .from('profiles')
+              .select('id, username, display_name, avatar_url')
+              .in('id', userIds);
+
+            // Map profiles to comments
+            commentsWithProfiles = commentResults.map((comment: any) => ({
+              ...comment,
+              profiles: profiles?.find((p: any) => p.id === comment.user_id)
+            }));
+          }
+        }
 
         if (commentError) {
           console.error('Comment search error:', commentError);
         }
 
         // Convert comment results to search results with relevance scoring
-        const scoredComments = commentResults?.map((c: any) => {
+        const scoredComments = commentsWithProfiles?.map((c: any) => {
           const contentScore = calculateRelevance(c.content, query);
           const discussionTitleScore = calculateRelevance(c.discussions?.title || '', query);
           const relevance = Math.max(contentScore, discussionTitleScore);
 
+          // Determine forum type and URL based on discussion category using helper functions
+          let forumType = '';
           let forumTypeLabel = '';
-          if (c.discussions?.main_category === 'stocks') {
+          let url = '';
+
+          if (isStockForum(c.discussions?.category || '')) {
+            forumType = 'stocks';
             forumTypeLabel = 'Stock Forum';
-          } else if (c.discussions?.main_category === 'crypto') {
+            url = `/stocks/${c.discussions?.category?.toLowerCase() || 'general'}/${c.discussion_id}`;
+          } else if (isCryptoForum(c.discussions?.category || '')) {
+            forumType = 'crypto';
             forumTypeLabel = 'Crypto Forum';
-          } else if (c.discussions?.main_category === 'futures') {
+            url = `/crypto/${c.discussions?.category?.toLowerCase() || 'general'}/${c.discussion_id}`;
+          } else if (isFuturesForum(c.discussions?.category || '')) {
+            forumType = 'futures';
             forumTypeLabel = 'Futures Forum';
+            url = `/futures/${c.discussions?.category?.toLowerCase() || 'general'}/${c.discussion_id}`;
+          } else if (isGeneralForum(c.discussions?.category || '')) {
+            forumType = 'general';
+            forumTypeLabel = 'General Forum';
+            url = `/general/${c.discussions?.category?.toLowerCase() || 'general'}/${c.discussion_id}`;
           } else {
+            // Default fallback
+            forumType = 'stocks';
             forumTypeLabel = 'Forum';
+            url = `/stocks/${c.discussions?.category?.toLowerCase() || 'general'}/${c.discussion_id}`;
           }
 
           // Truncate content for display
@@ -272,7 +344,13 @@ export default function SearchPage() {
             title: `Comment on: ${c.discussions?.title || 'Unknown Post'}`,
             subtitle: `Comment • ${c.discussions?.category?.toUpperCase() || 'Unknown'} ${forumTypeLabel} • ${new Date(c.created_at).toLocaleDateString()}`,
             content: truncatedContent,
-            url: `/${c.discussions?.main_category || 'stocks'}/${c.discussions?.category?.toLowerCase() || 'general'}/${c.discussion_id}`
+            url: url,
+            user: c.profiles ? {
+              id: c.profiles.id,
+              username: c.profiles.username,
+              display_name: c.profiles.display_name || c.profiles.username,
+              avatar_url: c.profiles.avatar_url
+            } : undefined
           };
         })
         .filter((item: any) => item.relevance > 0)
@@ -284,7 +362,8 @@ export default function SearchPage() {
           title: item.title,
           subtitle: item.subtitle,
           content: item.content,
-          url: item.url
+          url: item.url,
+          user: item.user
         })) || [];
 
         allResults.push(...scoredComments);
@@ -307,7 +386,7 @@ export default function SearchPage() {
     } finally {
       setIsSearching(false);
     }
-  };
+  }, [activeFilter]);
 
   // Filter results based on active filter
   const getFilteredResults = () => {
@@ -328,7 +407,16 @@ export default function SearchPage() {
     if (e.key === 'Enter' && searchQuery.trim()) {
       e.preventDefault();
       performSearch(searchQuery, activeFilter);
+      // Update URL with search query
+      router.push(`/search?query=${encodeURIComponent(searchQuery)}`);
     }
+  };
+
+  // Handle search button click or programmatic search
+  const handleSearch = (query: string, filter: SearchFilter = 'all') => {
+    performSearch(query, filter);
+    // Update URL with search query
+    router.push(`/search?query=${encodeURIComponent(query)}`);
   };
 
   // Initial search when component mounts
@@ -336,7 +424,7 @@ export default function SearchPage() {
     if (initialQuery) {
       performSearch(initialQuery, 'all');
     }
-  }, [initialQuery]);
+  }, [initialQuery, performSearch]);
 
   const filteredResults = getFilteredResults();
 
@@ -344,10 +432,10 @@ export default function SearchPage() {
     <div className="min-h-screen bg-background relative text-foreground">
       <Sidebar />
       <div
-        className="absolute inset-0 z-0 pointer-events-none grid-background"
+        className="absolute inset-0 z-0 pointer-events-none"
         style={{
-          backgroundImage: `linear-gradient(to right, rgba(128, 128, 128, 0.2) 1px, transparent 1px), linear-gradient(to bottom, rgba(128, 128, 128, 0.2) 1px, transparent 1px)`,
-          backgroundSize: "50px 50px",
+          backgroundImage: `linear-gradient(to right, rgba(128, 128, 128, 0.1) 1px, transparent 1px), linear-gradient(to bottom, rgba(128, 128, 128, 0.1) 1px, transparent 1px)`,
+          backgroundSize: "100px 100px",
         }}
       />
       <Navbar />
@@ -403,7 +491,7 @@ export default function SearchPage() {
                     key={filter.key}
                     onClick={() => {
                       setActiveFilter(filter.key as SearchFilter);
-                      performSearch(searchQuery, filter.key as SearchFilter);
+                      handleSearch(searchQuery, filter.key as SearchFilter);
                     }}
                     className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${
                       activeFilter === filter.key
@@ -450,8 +538,30 @@ export default function SearchPage() {
                               href={result.url}
                               className="block px-4 py-4 hover:bg-muted transition-colors border-b border-border last:border-b-0"
                             >
-                              <div className="font-medium text-foreground">{result.title}</div>
-                              <div className="text-sm text-muted-foreground mt-1">{result.subtitle}</div>
+                              <div className="flex items-start gap-3">
+                                {result.user?.avatar_url ? (
+                                  <img
+                                    src={result.user.avatar_url}
+                                    alt={result.user.display_name}
+                                    className="w-8 h-8 rounded-full flex-shrink-0"
+                                  />
+                                ) : (
+                                  <div className="w-8 h-8 rounded-full bg-muted flex items-center justify-center flex-shrink-0">
+                                    <span className="text-xs text-muted-foreground">
+                                      {result.user?.display_name?.[0]?.toUpperCase() || '?'}
+                                    </span>
+                                  </div>
+                                )}
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex items-center gap-2 mb-1">
+                                    <span className="font-medium text-sm text-foreground">
+                                      {result.user?.display_name || result.user?.username || 'Unknown User'}
+                                    </span>
+                                  </div>
+                                  <div className="font-medium text-foreground">{result.title}</div>
+                                  <div className="text-sm text-muted-foreground mt-1">{result.subtitle}</div>
+                                </div>
+                              </div>
                             </Link>
                           ))}
                         </div>
@@ -475,13 +585,35 @@ export default function SearchPage() {
                               href={result.url}
                               className="block px-4 py-4 hover:bg-muted transition-colors border-b border-border last:border-b-0"
                             >
-                              <div className="font-medium text-foreground">{result.title}</div>
-                              <div className="text-sm text-muted-foreground mt-1">{result.subtitle}</div>
-                              {result.content && (
-                                <div className="text-sm text-muted-foreground mt-2 italic">
-                                  "{result.content}"
+                              <div className="flex items-start gap-3">
+                                {result.user?.avatar_url ? (
+                                  <img
+                                    src={result.user.avatar_url}
+                                    alt={result.user.display_name}
+                                    className="w-8 h-8 rounded-full flex-shrink-0"
+                                  />
+                                ) : (
+                                  <div className="w-8 h-8 rounded-full bg-muted flex items-center justify-center flex-shrink-0">
+                                    <span className="text-xs text-muted-foreground">
+                                      {result.user?.display_name?.[0]?.toUpperCase() || '?'}
+                                    </span>
+                                  </div>
+                                )}
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex items-center gap-2 mb-1">
+                                    <span className="font-medium text-sm text-foreground">
+                                      {result.user?.display_name || result.user?.username || 'Unknown User'}
+                                    </span>
+                                  </div>
+                                  <div className="font-medium text-foreground">{result.title}</div>
+                                  <div className="text-sm text-muted-foreground mt-1">{result.subtitle}</div>
+                                  {result.content && (
+                                    <div className="text-sm text-muted-foreground mt-2 italic">
+                                      "{result.content}"
+                                    </div>
+                                  )}
                                 </div>
-                              )}
+                              </div>
                             </Link>
                           ))}
                         </div>

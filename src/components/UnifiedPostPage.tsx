@@ -56,7 +56,7 @@ export function UnifiedPostPage({
       // Use indexed filter for discussion lookup (using id as primary key)
       let query = supabase
         .from("discussions")
-        .select("id, title, content, category, created_at, upvotes, downvotes, views, comment_count, user_id, main_category, image_url");
+        .select("id, title, content, category, created_at, upvotes, downvotes, views, comment_count, user_id, image_url");
 
       // Apply indexed filter for discussion ID
       query = addIndexedFilter(query, 'discussions', { id: resolvedParams.postid });
