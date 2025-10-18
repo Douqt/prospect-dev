@@ -21,6 +21,26 @@ import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { Dialog, DialogContent, DialogTrigger, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { CreatePostForm } from "@/components/discussions/CreatePostForm";
 import { Plus } from "lucide-react";
+import { formatDistanceToNow } from "date-fns";
+import { STOCK_FORUMS } from "../../forum-categories";
+import { CRYPTO_FORUMS } from "@/lib/cryptoForums";
+
+// Helper function to format numbers with commas
+const formatNumber = (num: string | number) => {
+  if (typeof num === 'string') {
+    const parsed = parseFloat(num.replace(/,/g, ''));
+    if (isNaN(parsed)) return num;
+    return parsed.toLocaleString();
+  }
+  return num.toLocaleString();
+};
+
+// Helper function to format currency values
+const formatCurrency = (value: string) => {
+  const numValue = parseFloat(value.replace(/[$,]/g, ''));
+  if (isNaN(numValue)) return value;
+  return `$${numValue.toLocaleString()}`;
+};
 
 interface ForumData {
   symbol: string;
@@ -120,12 +140,18 @@ function ForumPostList({ category, discussions, isLoading, getRouterPath }: Foru
                         )}
                       </div>
                     </Link>
-                    <div>
-                      <Link href={`/profile/${discussion.profiles?.username || ''}`}>
-                        <p className="font-semibold text-sm cursor-pointer hover:text-[#e0a815] transition-colors">
-                          {discussion.profiles?.display_name ?? discussion.profiles?.username ?? 'Trader'}
-                        </p>
-                      </Link>
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 mb-1">
+                        <Link href={`/profile/${discussion.profiles?.username || ''}`}>
+                          <p className="font-semibold text-sm cursor-pointer hover:text-[#e0a815] transition-colors">
+                            {discussion.profiles?.display_name ?? discussion.profiles?.username ?? 'Trader'}
+                          </p>
+                        </Link>
+                        <span className="text-sm text-muted-foreground">•</span>
+                        <span className="text-sm text-muted-foreground">
+                          {formatDistanceToNow(new Date(discussion.created_at), { addSuffix: true })}
+                        </span>
+                      </div>
                     </div>
                   </div>
 
@@ -276,7 +302,41 @@ export function UnifiedForumPage({
     enabled: !!resolvedParams?.symbol
   });
 
+  // Fetch recent activity for this forum
+  const { data: recentActivity, isLoading: activityLoading } = useQuery({
+    queryKey: ["recent-activity", resolvedParams?.symbol],
+    queryFn: async () => {
+      if (!resolvedParams?.symbol) return [];
+
+      // Get recent discussions for this forum with profile data
+      let query = supabase
+        .from("discussions")
+        .select(`
+          id,
+          title,
+          created_at,
+          user_id,
+          profiles!inner(username, display_name)
+        `)
+        .eq("category", resolvedParams.symbol.toLowerCase())
+        .order("created_at", { ascending: false })
+        .limit(5);
+
+      const { data, error } = await query;
+
+      if (error) throw error;
+
+      return data || [];
+    },
+    enabled: !!resolvedParams?.symbol,
+    refetchInterval: 2 * 60 * 1000, // Refresh every 2 minutes
+  });
+
   const displayData = forumStats ? { ...fallbackData, ...forumStats } : fallbackData;
+
+  // Get data based on forum type
+  const stockData = resolvedParams && forumType === 'stocks' ? STOCK_FORUMS[resolvedParams.symbol.toUpperCase()] : null;
+  const cryptoData = resolvedParams && forumType === 'crypto' ? CRYPTO_FORUMS[resolvedParams.symbol.toUpperCase()] : null;
 
   if (!resolvedParams) {
     return (
@@ -322,8 +382,12 @@ export function UnifiedForumPage({
                     <BarChart3 className="h-8 w-8 text-[#e0a815]" />
                   </div>
                   <div className="space-y-1">
-                    <h1 className="text-4xl font-bold">{displayData.symbol}</h1>
-                    <p className="text-muted-foreground text-lg">{displayData.name}</p>
+                    <h1 className="text-4xl font-bold">
+                      {forumType === 'crypto' && cryptoData ? cryptoData : (stockData ? stockData.Name : displayData.symbol)}
+                    </h1>
+                    <p className="text-muted-foreground text-lg">
+                      {displayData.symbol} • {forumType === 'crypto' ? 'Cryptocurrency' : (stockData ? stockData.Country : 'Loading...')}
+                    </p>
                     <p className="text-muted-foreground">{displayData.description}</p>
                   </div>
                 </div>
@@ -395,73 +459,105 @@ export function UnifiedForumPage({
               <div className="h-16"></div>
             </div>
 
-            {/* Chart and Stats Sidebar - Right Side */}
-            <aside className="w-96 pl-8">
-              <div className="sticky top-6">
-                <div className="space-y-6">
-
-
-                  {/* Key Statistics */}
-                  <Card>
-                    <CardHeader>
-                      <CardTitle className="text-lg">Key Statistics</CardTitle>
-                    </CardHeader>
-                    <CardContent className="space-y-3">
-                      <div className="flex justify-between items-center">
-                        <span className="text-sm text-muted-foreground">Market Cap</span>
-                        <span className="font-medium">$3.2T</span>
-                      </div>
-                      <div className="flex justify-between items-center">
-                        <span className="text-sm text-muted-foreground">P/E Ratio</span>
-                        <span className="font-medium">28.5</span>
-                      </div>
-                      <div className="flex justify-between items-center">
-                        <span className="text-sm text-muted-foreground">Dividend Yield</span>
-                        <span className="font-medium">0.48%</span>
-                      </div>
-                      <div className="flex justify-between items-center">
-                        <span className="text-sm text-muted-foreground">52 Week High</span>
-                        <span className="font-medium">$1,408.00</span>
-                      </div>
-                      <div className="flex justify-between items-center">
-                        <span className="text-sm text-muted-foreground">52 Week Low</span>
-                        <span className="font-medium">$726.00</span>
-                      </div>
-                    </CardContent>
-                  </Card>
-
-                  {/* Recent Activity */}
-                  <Card>
-                    <CardHeader>
-                      <CardTitle className="text-lg">Recent Activity</CardTitle>
-                    </CardHeader>
-                    <CardContent className="space-y-3">
-                      <div className="flex items-start gap-3">
-                        <div className="w-2 h-2 bg-green-500 rounded-full mt-2"></div>
-                        <div className="space-y-1">
-                          <div className="text-sm font-medium">New analysis post</div>
-                          <div className="text-xs text-muted-foreground">5 minutes ago</div>
+            {/* Chart and Stats Sidebar - Right Side (Hidden for crypto) */}
+            {forumType !== 'crypto' && (
+              <aside className="w-96 pl-8">
+                <div className="sticky top-6">
+                  <div className="space-y-6">
+                    {/* Key Statistics */}
+                    <Card>
+                      <CardHeader>
+                        <CardTitle className="text-lg">Key Statistics</CardTitle>
+                      </CardHeader>
+                      <CardContent className="space-y-3">
+                        <div className="flex justify-between items-center">
+                          <span className="text-sm text-muted-foreground">Market Cap</span>
+                          <span className="font-medium">
+                            {stockData ? formatCurrency(stockData['Market Cap']) : 'Loading...'}
+                          </span>
                         </div>
-                      </div>
-                      <div className="flex items-start gap-3">
-                        <div className="w-2 h-2 bg-blue-500 rounded-full mt-2"></div>
-                        <div className="space-y-1">
-                          <div className="text-sm font-medium">Price target discussion</div>
-                          <div className="text-xs text-muted-foreground">12 minutes ago</div>
+                        <div className="flex justify-between items-center">
+                          <span className="text-sm text-muted-foreground">Last Sale</span>
+                          <span className="font-medium">
+                            {stockData ? stockData['Last Sale'] : 'Loading...'}
+                          </span>
                         </div>
-                      </div>
-                      <div className="flex items-start gap-3">
-                        <div className="w-2 h-2 bg-orange-500 rounded-full mt-2"></div>
-                        <div className="space-y-1">
-                          <div className="text-sm font-medium">Earnings call summary</div>
-                          <div className="text-xs text-muted-foreground">1 hour ago</div>
+                        <div className="flex justify-between items-center">
+                          <span className="text-sm text-muted-foreground">Net Change</span>
+                          <span className={`font-medium ${stockData && stockData['Net Change'].startsWith('-') ? 'text-red-500' : 'text-green-500'}`}>
+                            {stockData ? `${stockData['Net Change']} (${stockData['% Change']})` : 'Loading...'}
+                          </span>
                         </div>
-                      </div>
-                    </CardContent>
-                  </Card>
+                        <div className="flex justify-between items-center">
+                          <span className="text-sm text-muted-foreground">Volume</span>
+                          <span className="font-medium">
+                            {stockData ? formatNumber(stockData.Volume) : 'Loading...'}
+                          </span>
+                        </div>
+                        <div className="flex justify-between items-center">
+                          <span className="text-sm text-muted-foreground">Sector</span>
+                          <span className="font-medium">
+                            {stockData ? stockData.Sector : 'Loading...'}
+                          </span>
+                        </div>
+                      </CardContent>
+                    </Card>
+
+                    {/* Recent Activity */}
+                    <Card>
+                      <CardHeader>
+                        <CardTitle className="text-lg">Recent Activity</CardTitle>
+                      </CardHeader>
+                      <CardContent className="space-y-3">
+                        {activityLoading ? (
+                          <div className="text-center text-muted-foreground text-sm py-4">
+                            Loading recent activity...
+                          </div>
+                        ) : recentActivity && recentActivity.length > 0 ? (
+                          recentActivity.map((activity: any, index) => {
+                            const userDisplayName = activity.profiles?.[0]?.display_name ||
+                              activity.profiles?.[0]?.username ||
+                              'Anonymous';
+                            const timeAgo = formatDistanceToNow(new Date(activity.created_at), { addSuffix: true });
+
+                            // Determine activity type based on title/content
+                            let activityType = 'New discussion';
+                            let activityColor = 'bg-green-500';
+
+                            if (activity.title.toLowerCase().includes('analysis')) {
+                              activityType = 'New analysis';
+                              activityColor = 'bg-blue-500';
+                            } else if (activity.title.toLowerCase().includes('target')) {
+                              activityType = 'Price target';
+                              activityColor = 'bg-purple-500';
+                            } else if (activity.title.toLowerCase().includes('earnings')) {
+                              activityType = 'Earnings update';
+                              activityColor = 'bg-orange-500';
+                            }
+
+                            return (
+                              <div key={activity.id} className="flex items-start gap-3">
+                                <div className={`w-2 h-2 ${activityColor} rounded-full mt-2`}></div>
+                                <div className="space-y-1 flex-1">
+                                  <div className="text-sm font-medium">
+                                    <span className="text-[#e0a815]">{userDisplayName}</span> posted "{activity.title}"
+                                  </div>
+                                  <div className="text-xs text-muted-foreground">{timeAgo}</div>
+                                </div>
+                              </div>
+                            );
+                          })
+                        ) : (
+                          <div className="text-center text-muted-foreground text-sm py-4">
+                            No recent activity
+                          </div>
+                        )}
+                      </CardContent>
+                    </Card>
+                  </div>
                 </div>
-              </div>
-            </aside>
+              </aside>
+            )}
           </div>
         </main>
       </div>

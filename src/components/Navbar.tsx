@@ -6,7 +6,8 @@ import { timeAgo } from "../lib/time";
 import { useTheme } from "@/hooks/useTheme";
 import { Search, X } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { STOCK_FORUMS, CRYPTO_FORUMS, FUTURES_FORUMS } from "../../forum-categories";
+import { STOCK_FORUMS, FUTURES_FORUMS } from "../../forum-categories";
+import { CRYPTO_FORUMS } from "@/lib/cryptoForums";
 
 interface SearchResult {
   type: string;
@@ -32,6 +33,9 @@ export default function NavBar() {
   const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
   const [showSearchResults, setShowSearchResults] = useState(false);
   const [isSearching, setIsSearching] = useState(false);
+  const [searchPage, setSearchPage] = useState(0);
+  const [hasMoreResults, setHasMoreResults] = useState(true);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
   const router = useRouter();
 
   useEffect(() => {
@@ -215,57 +219,161 @@ export default function NavBar() {
     };
   }, [menuOpen, showSearchResults]);
 
-  // Search functionality
-  const performSearch = async (query: string) => {
+  // Search functionality with pagination support
+  const performSearch = async (query: string, page: number = 0, append: boolean = false) => {
     if (!query.trim()) {
       setSearchResults([]);
+      setSearchPage(0);
+      setHasMoreResults(true);
       return;
     }
 
-    setIsSearching(true);
+    if (page === 0) {
+      setIsSearching(true);
+    } else {
+      setIsLoadingMore(true);
+    }
+
     try {
       const upperQuery = query.toUpperCase();
+      const resultsPerPage = 8;
 
-      // Get predefined forums that match the query
-      const matchingStockForums = STOCK_FORUMS
-        .filter(forum => forum.toUpperCase().includes(upperQuery))
-        .slice(0, 3)
-        .map(forum => ({
-          type: 'forum',
-          id: forum,
-          title: `${forum.toUpperCase()} Forum`,
-          subtitle: 'Stock Trading Forum',
-          url: `/stocks/${forum.toLowerCase()}`
-        }));
+      // Helper function to calculate search relevance with custom weighting
+      const calculateRelevance = (text: string, query: string): number => {
+        const upperText = text.toUpperCase();
+        const upperQuery = query.toUpperCase();
 
-      const matchingCryptoForums = CRYPTO_FORUMS
-        .filter(forum => forum.toUpperCase().includes(upperQuery))
-        .slice(0, 2)
-        .map(forum => ({
-          type: 'forum',
-          id: forum,
-          title: `${forum.toUpperCase()} Forum`,
-          subtitle: 'Crypto Trading Forum',
-          url: `/crypto/${forum.toLowerCase()}`
-        }));
+        // Custom keyword weighting system for posts
+        const keywordWeights: { [key: string]: number } = {
+          '8th': 1.3,
+          'charm': 6,
+          'post': 2,
+          'time': 4
+        };
 
-      const matchingFuturesForums = FUTURES_FORUMS
-        .filter(forum => forum.toUpperCase().includes(upperQuery))
-        .slice(0, 2)
-        .map(forum => ({
-          type: 'forum',
-          id: forum,
-          title: `${forum.toUpperCase()} Forum`,
-          subtitle: 'Futures Trading Forum',
-          url: `/futures/${forum.toLowerCase()}`
-        }));
+        let baseScore = 0;
 
-      // Search posts
+        // Check for exact matches first
+        if (upperText === upperQuery) return 100;
+
+        // Check for keyword matches with custom weights
+        for (const [keyword, weight] of Object.entries(keywordWeights)) {
+          if (upperText.includes(keyword.toUpperCase()) || upperQuery.includes(keyword.toUpperCase())) {
+            baseScore += weight * 10; // Multiply by 10 to give these higher priority
+          }
+        }
+
+        // Standard relevance scoring
+        if (upperText.startsWith(upperQuery)) {
+          baseScore = Math.max(baseScore, 90);
+        } else if (upperText.includes(upperQuery)) {
+          baseScore = Math.max(baseScore, 80);
+        } else if (upperQuery.includes(upperText)) {
+          baseScore = Math.max(baseScore, 70);
+        } else {
+          // Fuzzy match - check if all characters of query exist in text in order
+          let queryIndex = 0;
+          for (let i = 0; i < upperText.length && queryIndex < upperQuery.length; i++) {
+            if (upperText[i] === upperQuery[queryIndex]) {
+              queryIndex++;
+            }
+          }
+          if (queryIndex === upperQuery.length) {
+            baseScore = Math.max(baseScore, 60);
+          }
+        }
+
+        return baseScore;
+      };
+
+      // Get predefined forums that match the query with relevance scoring
+      const scoredStockForums = Object.keys(STOCK_FORUMS)
+        .map(symbol => {
+          const stock = STOCK_FORUMS[symbol];
+          const symbolScore = calculateRelevance(symbol, query);
+          const nameScore = calculateRelevance(stock.Name, query);
+          const relevance = Math.max(symbolScore, nameScore);
+
+          return {
+            symbol,
+            stock,
+            relevance,
+            title: `${symbol.toUpperCase()} - ${stock.Name}`,
+            subtitle: `Stock Forum • ${stock['Last Sale']} (${stock['% Change']})`,
+            url: `/stocks/${symbol.toLowerCase()}`
+          };
+        })
+        .filter(item => item.relevance > 0)
+        .sort((a, b) => b.relevance - a.relevance) // Sort by relevance (highest first)
+        .slice(0, Math.min(10, resultsPerPage));
+
+      const scoredCryptoForums = Object.keys(CRYPTO_FORUMS)
+        .map(symbol => {
+          const cryptoName = CRYPTO_FORUMS[symbol];
+          const symbolScore = calculateRelevance(symbol, query);
+          const nameScore = calculateRelevance(cryptoName, query);
+          const relevance = Math.max(symbolScore, nameScore);
+
+          return {
+            symbol,
+            cryptoName,
+            relevance,
+            title: `${symbol.toUpperCase()} - ${cryptoName}`,
+            subtitle: 'Crypto Trading Forum',
+            url: `/crypto/${symbol.toLowerCase()}`
+          };
+        })
+        .filter(item => item.relevance > 0)
+        .sort((a, b) => b.relevance - a.relevance) // Sort by relevance (highest first)
+        .slice(0, Math.min(15, resultsPerPage));
+
+      const scoredFuturesForums = FUTURES_FORUMS
+        .map(forum => {
+          const relevance = calculateRelevance(forum, query);
+          return {
+            forum,
+            relevance,
+            title: `${forum.toUpperCase()} Forum`,
+            subtitle: 'Futures Trading Forum',
+            url: `/futures/${forum.toLowerCase()}`
+          };
+        })
+        .filter(item => item.relevance > 0)
+        .sort((a, b) => b.relevance - a.relevance) // Sort by relevance (highest first)
+        .slice(0, Math.min(10, resultsPerPage));
+
+      const matchingStockForums = scoredStockForums.map(item => ({
+        type: 'stock-forum',
+        id: item.symbol,
+        title: item.title,
+        subtitle: item.subtitle,
+        url: item.url
+      }));
+
+      const matchingCryptoForums = scoredCryptoForums.map(item => ({
+        type: 'crypto-forum',
+        id: item.symbol,
+        title: item.title,
+        subtitle: item.subtitle,
+        url: item.url
+      }));
+
+      const matchingFuturesForums = scoredFuturesForums.map(item => ({
+        type: 'futures-forum',
+        id: item.forum,
+        title: item.title,
+        subtitle: item.subtitle,
+        url: item.url
+      }));
+
+      // Search posts with pagination
+      const postLimit = Math.max(3, resultsPerPage - matchingStockForums.length - matchingCryptoForums.length - matchingFuturesForums.length);
       const { data: postResults, error: postError } = await supabase
         .from('discussions')
         .select('id, title, category, created_at, main_category')
         .or(`title.ilike.%${query}%,content.ilike.%${query}%`)
-        .limit(3);
+        .order('created_at', { ascending: false })
+        .limit(postLimit * 2); // Get more posts to allow for relevance filtering
 
       if (postError) {
         console.error('Post search error:', postError);
@@ -277,23 +385,204 @@ export default function NavBar() {
         ...matchingFuturesForums
       ];
 
-      // Convert post results to proper URLs based on main_category
-      const posts = postResults?.map(p => ({
+      // Convert post results to proper URLs with relevance scoring
+      const scoredPosts = postResults?.map(p => {
+        const titleScore = calculateRelevance(p.title, query);
+        const categoryScore = calculateRelevance(p.category, query);
+        const relevance = Math.max(titleScore, categoryScore);
+
+        let forumTypeLabel = '';
+        if (p.main_category === 'stocks') {
+          forumTypeLabel = 'Stock Forum';
+        } else if (p.main_category === 'crypto') {
+          forumTypeLabel = 'Crypto Forum';
+        } else if (p.main_category === 'futures') {
+          forumTypeLabel = 'Futures Forum';
+        } else {
+          forumTypeLabel = 'Forum';
+        }
+
+        return {
+          post: p,
+          relevance,
+          title: p.title,
+          subtitle: `Post • ${p.category.toUpperCase()} ${forumTypeLabel} • ${new Date(p.created_at).toLocaleDateString()}`,
+          url: `/${p.main_category}/${p.category.toLowerCase()}/${p.id}`
+        };
+      })
+      .filter(item => item.relevance > 0)
+      .sort((a, b) => b.relevance - a.relevance) // Sort by relevance (highest first)
+      .slice(0, postLimit) // Limit to requested number after sorting
+      .map(item => ({
         type: 'post',
-        id: p.id,
-        title: p.title,
-        subtitle: `${p.category.toUpperCase()} • ${new Date(p.created_at).toLocaleDateString()}`,
-        url: `/${p.main_category}/${p.category.toLowerCase()}/${p.id}`
+        id: item.post.id,
+        title: item.title,
+        subtitle: item.subtitle,
+        url: item.url
       })) || [];
 
-      // Combine predefined forums and posts, limiting total results
-      const combinedResults = [...predefinedForums, ...posts].slice(0, 8);
-      setSearchResults(combinedResults);
+      // Combine predefined forums and posts
+      const combinedResults = [...predefinedForums, ...scoredPosts];
+
+      if (page === 0 || !append) {
+        setSearchResults(combinedResults);
+        setSearchPage(1);
+        // Check if we got fewer results than requested (indicates end of data)
+        const totalPredefinedForums = matchingStockForums.length + matchingCryptoForums.length + matchingFuturesForums.length;
+        const hasMorePosts = postResults && postResults.length >= postLimit;
+        const hasMorePredefined = totalPredefinedForums >= resultsPerPage;
+        setHasMoreResults(hasMorePredefined || hasMorePosts);
+      } else {
+        // Filter out duplicates before adding
+        setSearchResults(prev => {
+          const existingIds = new Set(prev.map(r => r.id));
+          const newResults = combinedResults.filter(r => !existingIds.has(r.id));
+          return [...prev, ...newResults];
+        });
+        setSearchPage(page + 1);
+
+        // Check if this batch has fewer results than requested (indicates end of data)
+        const totalPredefinedForums = matchingStockForums.length + matchingCryptoForums.length + matchingFuturesForums.length;
+        const hasMorePosts = postResults && postResults.length >= postLimit;
+        const hasMorePredefined = totalPredefinedForums >= resultsPerPage;
+        setHasMoreResults(hasMorePredefined || hasMorePosts);
+      }
     } catch (error) {
       console.error('Search error:', error);
+      if (page === 0) {
+        setSearchResults([]);
+      }
+    } finally {
+      setIsSearching(false);
+      setIsLoadingMore(false);
+    }
+  };
+
+  // Reddit-style posts-only search (when Enter is pressed)
+  const performPostsOnlySearch = async (query: string) => {
+    if (!query.trim()) return;
+
+    setIsSearching(true);
+    setShowSearchResults(true);
+
+    try {
+      const upperQuery = query.toUpperCase();
+
+      // Helper function to calculate search relevance with custom weighting
+      const calculateRelevance = (text: string, query: string): number => {
+        const upperText = text.toUpperCase();
+        const upperQuery = query.toUpperCase();
+
+        // Custom keyword weighting system for posts
+        const keywordWeights: { [key: string]: number } = {
+          '8th': 1.3,
+          'charm': 6,
+          'post': 2,
+          'time': 4
+        };
+
+        let baseScore = 0;
+
+        // Check for exact matches first
+        if (upperText === upperQuery) return 100;
+
+        // Check for keyword matches with custom weights
+        for (const [keyword, weight] of Object.entries(keywordWeights)) {
+          if (upperText.includes(keyword.toUpperCase()) || upperQuery.includes(keyword.toUpperCase())) {
+            baseScore += weight * 10; // Multiply by 10 to give these higher priority
+          }
+        }
+
+        // Standard relevance scoring
+        if (upperText.startsWith(upperQuery)) {
+          baseScore = Math.max(baseScore, 90);
+        } else if (upperText.includes(upperQuery)) {
+          baseScore = Math.max(baseScore, 80);
+        } else if (upperQuery.includes(upperText)) {
+          baseScore = Math.max(baseScore, 70);
+        } else {
+          // Fuzzy match - check if all characters of query exist in text in order
+          let queryIndex = 0;
+          for (let i = 0; i < upperText.length && queryIndex < upperQuery.length; i++) {
+            if (upperText[i] === upperQuery[queryIndex]) {
+              queryIndex++;
+            }
+          }
+          if (queryIndex === upperQuery.length) {
+            baseScore = Math.max(baseScore, 60);
+          }
+        }
+
+        return baseScore;
+      };
+
+      // Search only posts (Reddit style)
+      const { data: postResults, error: postError } = await supabase
+        .from('discussions')
+        .select('id, title, category, created_at, main_category')
+        .or(`title.ilike.%${query}%,content.ilike.%${query}%`)
+        .order('created_at', { ascending: false })
+        .limit(15); // Show more posts in Reddit style
+
+      if (postError) {
+        console.error('Post search error:', postError);
+      }
+
+      // Convert post results to proper URLs with relevance scoring
+      const scoredPosts = postResults?.map(p => {
+        const titleScore = calculateRelevance(p.title, query);
+        const categoryScore = calculateRelevance(p.category, query);
+        const relevance = Math.max(titleScore, categoryScore);
+
+        let forumTypeLabel = '';
+        if (p.main_category === 'stocks') {
+          forumTypeLabel = 'Stock Forum';
+        } else if (p.main_category === 'crypto') {
+          forumTypeLabel = 'Crypto Forum';
+        } else if (p.main_category === 'futures') {
+          forumTypeLabel = 'Futures Forum';
+        } else {
+          forumTypeLabel = 'Forum';
+        }
+
+        return {
+          post: p,
+          relevance,
+          title: p.title,
+          subtitle: `Post • ${p.category.toUpperCase()} ${forumTypeLabel} • ${new Date(p.created_at).toLocaleDateString()}`,
+          url: `/${p.main_category}/${p.category.toLowerCase()}/${p.id}`
+        };
+      })
+      .filter(item => item.relevance > 0)
+      .sort((a, b) => b.relevance - a.relevance) // Sort by relevance (highest first)
+      .slice(0, 15) // Show top 15 posts
+      .map(item => ({
+        type: 'post',
+        id: item.post.id,
+        title: item.title,
+        subtitle: item.subtitle,
+        url: item.url
+      })) || [];
+
+      // Set results to show only posts (Reddit style)
+      setSearchResults(scoredPosts);
+      setHasMoreResults(false); // No infinite scroll for Enter key searches
+
+    } catch (error) {
+      console.error('Posts-only search error:', error);
       setSearchResults([]);
     } finally {
       setIsSearching(false);
+    }
+  };
+
+  // Load more results for infinite scroll
+  const loadMoreResults = () => {
+    if (hasMoreResults && !isLoadingMore && searchQuery.trim()) {
+      console.log('🔄 Loading more results, current page:', searchPage);
+      setIsLoadingMore(true);
+      const nextPage = searchPage + 1;
+      performSearch(searchQuery, nextPage, true);
     }
   };
 
@@ -305,6 +594,79 @@ export default function NavBar() {
 
     return () => clearTimeout(timer);
   }, [searchQuery]);
+
+  // Reset pagination when search query changes
+  useEffect(() => {
+    setSearchPage(0);
+    setHasMoreResults(true);
+    setSearchResults([]);
+  }, [searchQuery]);
+
+  // Infinite scroll handler with hover detection
+  useEffect(() => {
+    const dropdown = document.querySelector('.search-results-dropdown');
+    if (!dropdown) return;
+
+    let isHoveringDropdown = false;
+    const scrollableDiv = dropdown.querySelector('.max-h-96.overflow-y-auto') as HTMLElement;
+
+    const handleScroll = (e: Event) => {
+      if (!scrollableDiv || !isHoveringDropdown) return;
+
+      const { scrollTop, scrollHeight, clientHeight } = scrollableDiv;
+      const isNearBottom = scrollTop + clientHeight >= scrollHeight - 50; // Reduced threshold for better detection
+
+      if (isNearBottom && hasMoreResults && !isLoadingMore) {
+        loadMoreResults();
+      }
+    };
+
+    const handleMouseEnter = () => {
+      isHoveringDropdown = true;
+    };
+
+    const handleMouseLeave = () => {
+      isHoveringDropdown = false;
+    };
+
+    // Prevent body scroll when hovering over dropdown
+    const preventBodyScroll = (e: WheelEvent) => {
+      if (isHoveringDropdown && scrollableDiv) {
+        e.preventDefault();
+        e.stopPropagation();
+
+        // Manually scroll the dropdown content
+        scrollableDiv.scrollTop += e.deltaY;
+
+        // Check if we need to load more results after scrolling
+        setTimeout(() => {
+          const { scrollTop, scrollHeight, clientHeight } = scrollableDiv;
+          const isNearBottom = scrollTop + clientHeight >= scrollHeight - 50;
+
+          if (isNearBottom && hasMoreResults && !isLoadingMore) {
+            loadMoreResults();
+          }
+        }, 10);
+      }
+    };
+
+    // Add event listeners to the scrollable div
+    if (scrollableDiv) {
+      scrollableDiv.addEventListener('scroll', handleScroll);
+    }
+    dropdown.addEventListener('mouseenter', handleMouseEnter);
+    dropdown.addEventListener('mouseleave', handleMouseLeave);
+    dropdown.addEventListener('wheel', preventBodyScroll, { passive: false });
+
+    return () => {
+      if (scrollableDiv) {
+        scrollableDiv.removeEventListener('scroll', handleScroll);
+      }
+      dropdown.removeEventListener('mouseenter', handleMouseEnter);
+      dropdown.removeEventListener('mouseleave', handleMouseLeave);
+      dropdown.removeEventListener('wheel', preventBodyScroll);
+    };
+  }, [hasMoreResults, isLoadingMore, searchQuery]);
 
   const handleSearchResultClick = (url: string) => {
     setSearchQuery("");
@@ -347,6 +709,13 @@ export default function NavBar() {
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               onFocus={() => setShowSearchResults(true)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && searchQuery.trim()) {
+                  e.preventDefault();
+                  // Navigate to search page when Enter is pressed (Reddit style)
+                  router.push(`/search?query=${encodeURIComponent(searchQuery)}`);
+                }
+              }}
               className="w-full pl-10 pr-10 py-2 px-4 bg-muted border border-border rounded-full text-sm focus:outline-none focus:ring-2 focus:ring-[#e0a815] focus:border-transparent"
             />
             {searchQuery && (
@@ -361,32 +730,116 @@ export default function NavBar() {
               </button>
             )}
 
-            {/* Search Results Dropdown */}
+            {/* Search Results Dropdown - Reddit Style */}
             {showSearchResults && searchQuery && (
-              <div className="absolute top-full left-0 right-0 mt-2 bg-popover border border-border rounded-lg shadow-xl z-50 max-h-96 overflow-y-auto">
-                {isSearching ? (
-                  <div className="p-4 text-center text-muted-foreground">
-                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-[#e0a815] mx-auto mb-2"></div>
-                    Searching...
-                  </div>
-                ) : searchResults.length > 0 ? (
-                  <div className="py-2">
-                    {searchResults.map((result, index) => (
-                      <button
-                        key={`${result.type}-${result.id}-${index}`}
-                        onClick={() => handleSearchResultClick(result.url)}
-                        className="w-full text-left px-4 py-3 hover:bg-muted transition-colors border-b border-border last:border-b-0"
-                      >
-                        <div className="font-medium text-foreground text-sm">{result.title}</div>
-                        <div className="text-xs text-muted-foreground mt-1">{result.subtitle}</div>
-                      </button>
-                    ))}
-                  </div>
-                ) : searchQuery.trim() ? (
-                  <div className="p-4 text-center text-muted-foreground text-sm">
-                    No results found for "{searchQuery}"
-                  </div>
-                ) : null}
+              <div className="absolute top-full left-0 right-0 mt-2 bg-popover border border-border rounded-lg shadow-xl z-50 search-results-dropdown">
+                <div className="max-h-96 overflow-y-auto scrollbar-hide">
+                  <style jsx>{`
+                    .scrollbar-hide {
+                      -ms-overflow-style: none;
+                      scrollbar-width: none;
+                    }
+                    .scrollbar-hide::-webkit-scrollbar {
+                      display: none;
+                    }
+                  `}</style>
+                  {isSearching ? (
+                    <div className="p-4 text-center text-muted-foreground">
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-[#e0a815] mx-auto mb-2"></div>
+                      Searching...
+                    </div>
+                  ) : searchResults.length > 0 ? (
+                    <>
+                      {/* Posts Section */}
+                      {(() => {
+                        const posts = searchResults.filter(result => result.type === 'post');
+                        const forums = searchResults.filter(result => result.type !== 'post');
+
+                        return (
+                          <>
+                            {/* Posts Section */}
+                            {posts.length > 0 && (
+                              <>
+                                <div className="px-4 py-2 border-b border-border bg-muted/50">
+                                  <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                                    Posts
+                                  </div>
+                                </div>
+                                <div className="py-2">
+                                  {posts.slice(0, 5).map((result, index) => (
+                                    <button
+                                      key={`${result.type}-${result.id}-${index}`}
+                                      onClick={() => handleSearchResultClick(result.url)}
+                                      className="w-full text-left px-4 py-3 hover:bg-muted transition-colors border-b border-border last:border-b-0"
+                                    >
+                                      <div className="font-medium text-foreground text-sm">{result.title}</div>
+                                      <div className="text-xs text-muted-foreground mt-1">{result.subtitle}</div>
+                                    </button>
+                                  ))}
+                                </div>
+
+                                {/* Show more posts option */}
+                                {posts.length > 5 && (
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      // TODO: Implement "show more posts" functionality
+                                    }}
+                                    className="w-full text-left px-4 py-2 text-xs text-[#e0a815] hover:bg-muted transition-colors border-b border-border"
+                                  >
+                                    Show more posts
+                                  </button>
+                                )}
+                              </>
+                            )}
+
+                            {/* Communities Section */}
+                            {forums.length > 0 && (
+                              <>
+                                <div className="px-4 py-2 border-b border-border bg-muted/50">
+                                  <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                                    Communities
+                                  </div>
+                                </div>
+                                <div className="py-2">
+                                  {forums.slice(0, 5).map((result, index) => (
+                                    <button
+                                      key={`${result.type}-${result.id}-${index}`}
+                                      onClick={() => handleSearchResultClick(result.url)}
+                                      className="w-full text-left px-4 py-3 hover:bg-muted transition-colors border-b border-border last:border-b-0"
+                                    >
+                                      <div className="font-medium text-foreground text-sm">{result.title}</div>
+                                      <div className="text-xs text-muted-foreground mt-1">{result.subtitle}</div>
+                                    </button>
+                                  ))}
+                                </div>
+                              </>
+                            )}
+                          </>
+                        );
+                      })()}
+
+                      {/* Loading more indicator */}
+                      {isLoadingMore && (
+                        <div className="p-4 text-center text-muted-foreground border-t border-border">
+                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-[#e0a815] mx-auto mb-2"></div>
+                          Loading more...
+                        </div>
+                      )}
+
+                      {/* End of results indicator */}
+                      {!hasMoreResults && searchResults.length > 0 && (
+                        <div className="p-3 text-center text-muted-foreground border-t border-border">
+                          <div className="text-xs">No more results</div>
+                        </div>
+                      )}
+                    </>
+                  ) : searchQuery.trim() ? (
+                    <div className="p-4 text-center text-muted-foreground text-sm">
+                      No results found for "{searchQuery}"
+                    </div>
+                  ) : null}
+                </div>
               </div>
             )}
           </div>

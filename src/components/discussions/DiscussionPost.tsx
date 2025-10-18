@@ -52,7 +52,7 @@ export function DiscussionPost({ discussion }: DiscussionPostProps) {
 
   // Helper function to determine router path based on category
   const getRouterPath = (category: string): string => {
-    if (STOCK_FORUMS.includes(category.toUpperCase())) {
+    if (Object.keys(STOCK_FORUMS).includes(category.toUpperCase())) {
       return '/stocks';
     } else if (CRYPTO_FORUMS.includes(category.toUpperCase())) {
       return '/crypto';

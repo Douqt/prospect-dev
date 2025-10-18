@@ -9,7 +9,7 @@ export default function StocksPage() {
       description="Follow stock traders and markets in real-time"
       badgeText="All Forums"
       forumType="stocks"
-      forumList={STOCK_FORUMS}
+      forumList={Object.keys(STOCK_FORUMS)}
       categoryFilter={(category: string) => isStockForum(category)}
       getRouterPath={(category: string) => '/stocks'}
     />

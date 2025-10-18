@@ -15,6 +15,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { LazyImage } from "@/components/LazyImage";
 import { DiscussionListSkeleton } from "@/components/ui/skeleton-loading";
+import { formatDistanceToNow } from "date-fns";
 
 /**
  * Discussion data structure with profile information
@@ -355,12 +356,18 @@ export function UnifiedDashboard({
                               )}
                             </div>
                           </Link>
-                          <div>
-                            <Link href={`/profile/${discussion.profiles?.username || ''}`}>
-                              <p className="font-semibold text-sm cursor-pointer hover:text-[#e0a815] transition-colors">
-                                {discussion.profiles?.display_name ?? discussion.profiles?.username ?? 'Trader'}
-                              </p>
-                            </Link>
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2 mb-1">
+                              <Link href={`/profile/${discussion.profiles?.username || ''}`}>
+                                <p className="font-semibold text-sm cursor-pointer hover:text-[#e0a815] transition-colors">
+                                  {discussion.profiles?.display_name ?? discussion.profiles?.username ?? 'Trader'}
+                                </p>
+                              </Link>
+                              <span className="text-sm text-muted-foreground">•</span>
+                              <span className="text-sm text-muted-foreground">
+                                {formatDistanceToNow(new Date(discussion.created_at), { addSuffix: true })}
+                              </span>
+                            </div>
                             <Link href={`${getRouterPath(discussion.category)}/${discussion.category.toLowerCase()}`}>
                               <span className="cursor-pointer text-xs px-2 py-1 bg-muted rounded-md hover:bg-muted/80 transition-colors">
                                 {discussion.category.toUpperCase()}
