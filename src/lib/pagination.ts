@@ -1,3 +1,5 @@
+import type { SupabaseClient } from '@supabase/supabase-js';
+
 /**
  * Options for cursor-based pagination
  */
@@ -105,10 +107,10 @@ export type TableFilters =
  * @returns Modified query with filters applied
  */
 export function addIndexedFilter(
-  query: any,
+  query: ReturnType<SupabaseClient['from']>,
   tableName: string,
-  filters: Record<string, any>
-): any {
+  filters: Record<string, string | string[] | undefined>
+): ReturnType<SupabaseClient['from']> {
   // For discussions table (equivalent to posts)
   if (tableName === 'discussions') {
     if (filters.id) {
@@ -218,11 +220,19 @@ export function addFullTextSearch(
  * @returns Promise with communities data and pagination info
  */
 export async function getUserCommunities(
-  supabase: any,
+  supabase: SupabaseClient,
   userId: string,
   options: CommunityQueryOptions = {}
 ): Promise<{
-  data: any[];
+  data: Array<{
+    community_symbol: string;
+    followed_at: string;
+    community_stats: {
+      member_count: number;
+      post_count: number;
+      last_activity: string;
+    } | null;
+  }>;
   nextCursor?: string | null;
   prevCursor?: string | null;
   hasMore: boolean;
@@ -284,11 +294,19 @@ export async function getUserCommunities(
  * @returns Promise with users data and pagination info
  */
 export async function getCommunityUsers(
-  supabase: any,
+  supabase: SupabaseClient,
   communitySymbol: string,
   options: CommunityQueryOptions = {}
 ): Promise<{
-  data: any[];
+  data: Array<{
+    user_id: string;
+    followed_at: string;
+    profiles: {
+      username: string;
+      display_name: string | null;
+      avatar_url: string | null;
+    } | null;
+  }>;
   nextCursor?: string | null;
   prevCursor?: string | null;
   hasMore: boolean;
@@ -349,7 +367,7 @@ export async function getCommunityUsers(
  * @returns Promise with community statistics
  */
 export async function getCommunityStats(
-  supabase: any,
+  supabase: SupabaseClient,
   communitySymbol: string
 ): Promise<{
   member_count: number;
@@ -378,7 +396,7 @@ export async function getCommunityStats(
  * @returns Promise with updated statistics
  */
 export async function updateCommunityStats(
-  supabase: any,
+  supabase: SupabaseClient,
   communitySymbol: string,
   action: 'follow' | 'unfollow'
 ): Promise<{
