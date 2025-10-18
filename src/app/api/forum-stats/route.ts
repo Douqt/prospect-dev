@@ -1,7 +1,8 @@
 import { createServerClient } from '@/lib/supabase-server';
 import { createClient } from '@supabase/supabase-js';
 import { NextResponse } from 'next/server';
-import { addIndexedFilter } from '@/lib/pagination';
+import { addIndexedFilter, getCommunityStats, updateCommunityStats } from '@/lib/pagination';
+import { CommunityCache } from '@/lib/cache';
 
 /**
  * Forum statistics response structure
@@ -29,23 +30,23 @@ export async function GET(request: Request) {
 
   try {
     const supabase = await createServerClient();
-    const upperSymbol = symbol.toUpperCase();
+    const lowerSymbol = symbol.toLowerCase();
 
-    // Try to get cached stats first
-    const { data: communityStats, error: statsError } = await supabase
-      .from('community_stats')
-      .select('member_count, post_count')
-      .eq('community_symbol', upperSymbol)
-      .single();
+    // Try cache first for instant response
+    const cacheKey = `forum_stats:${lowerSymbol}`;
+    const cachedResult = CommunityCache.getCommunityStats(cacheKey);
 
-    if (statsError && statsError.code !== 'PGRST116') {
-      console.error('Error fetching community stats:', statsError);
+    if (cachedResult) {
+      return NextResponse.json(cachedResult);
     }
+
+    // Try to get stats from community_stats table
+    const communityStats = await getCommunityStats(supabase, lowerSymbol);
 
     let membersCount = communityStats?.member_count || 0;
     let postsCount = communityStats?.post_count || 0;
 
-    // If no cached data, calculate dynamically
+    // If no cached data, calculate dynamically using optimized functions
     if (!communityStats || (membersCount === 0 && postsCount === 0)) {
       try {
         // Count posts from discussions table with indexed filter
@@ -68,7 +69,7 @@ export async function GET(request: Request) {
           .from('community_memberships')
           .select('id', { count: 'exact' });
 
-        membersQuery = addIndexedFilter(membersQuery, 'community_memberships', { community_symbol: symbol.toUpperCase() });
+        membersQuery = addIndexedFilter(membersQuery, 'community_memberships', { community_symbol: symbol.toLowerCase() });
 
         const { count: membersCountResult, error: membersError } = await membersQuery;
 
@@ -80,28 +81,11 @@ export async function GET(request: Request) {
 
         console.log(`Dynamic counts for ${symbol.toUpperCase()}: ${membersCount} members, ${postsCount} posts`);
 
-        // Try to populate community_stats table for future requests
+        // Update community_stats table for future requests using optimized function
         try {
-          const supabaseAdmin = createClient(
-            process.env.NEXT_PUBLIC_SUPABASE_URL!,
-            process.env.SUPABASE_SERVICE_ROLE_KEY! // server only!
-          );
-
-          await supabaseAdmin
-            .from('community_stats')
-            .upsert({
-              community_symbol: symbol.toUpperCase(),
-              member_count: membersCount,
-              post_count: postsCount,
-              last_activity: new Date().toISOString(),
-              updated_at: new Date().toISOString()
-            }, {
-              onConflict: 'community_symbol'
-            });
-
-          console.log(`Populated community_stats for ${symbol.toUpperCase()}`);
+          await updateCommunityStats(supabase, lowerSymbol, 'follow'); // This will recalculate both counts
         } catch (populateError) {
-          console.error('Error populating community_stats:', populateError);
+          console.error('Error updating community_stats:', populateError);
           // Non-critical error, continue with dynamic counts
         }
       } catch (dynamicError) {
@@ -109,12 +93,19 @@ export async function GET(request: Request) {
       }
     }
 
-
-
-    return NextResponse.json({
+    // Prepare response
+    const result = {
       posts: postsCount || 0,
       members: membersCount ? (membersCount >= 1000000 ? `${(membersCount / 1000000).toFixed(1)}M` : membersCount >= 1000 ? `${(membersCount / 1000).toFixed(1)}K` : membersCount.toString()) : "0",
-    });
+    };
+
+    // Cache the result for future requests
+    CommunityCache.setCommunityStats(cacheKey, result, { ttl: 300 }); // 5 minute cache
+
+    // Also invalidate cache to ensure fresh data for next request
+    CommunityCache.invalidateCommunityCache(lowerSymbol);
+
+    return NextResponse.json(result);
   } catch (error) {
     console.error('Forum stats API error:', error);
     return NextResponse.json({

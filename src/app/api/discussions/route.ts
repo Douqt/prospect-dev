@@ -47,6 +47,47 @@ export async function POST(request: Request) {
         }, { status: 500 });
       }
 
+      // Use API route to handle service role for stats update
+      try {
+        const response = await fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/rest/v1/rpc/increment_post_count`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'apikey': process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+            'Authorization': `Bearer ${process.env.SUPABASE_SERVICE_ROLE_KEY!}`,
+          },
+          body: JSON.stringify({
+            community_sym: category.trim().toLowerCase()
+          }),
+        });
+
+        if (response.ok) {
+          console.log(`Post count incremented for ${category.trim().toUpperCase()}`);
+        } else {
+          console.error('Error updating post count:', response.statusText);
+        }
+      } catch (statsError) {
+        console.error('Error updating post count:', statsError);
+        // Don't fail the request if stats update fails
+      }
+
+      // Invalidate relevant queries to refresh UI with new post count
+      try {
+        const cacheInvalidationResponse = await fetch('/api/invalidate-cache', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            communitySymbol: category.trim().toLowerCase()
+          }),
+        });
+
+        if (cacheInvalidationResponse.ok) {
+          console.log(`Cache invalidated for ${category.trim().toUpperCase()}`);
+        }
+      } catch (cacheError) {
+        console.error('Error invalidating cache:', cacheError);
+      }
+
       return NextResponse.json({
         discussion,
         message: 'Discussion created successfully'

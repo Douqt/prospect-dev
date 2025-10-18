@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { Dialog, DialogContent, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogTrigger, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { DiscussionList } from "./DiscussionList";
 import { CreatePostForm } from "./CreatePostForm";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
@@ -40,6 +40,10 @@ export function DiscussionForum({ category }: DiscussionForumProps) {
             </Button>
           </DialogTrigger>
           <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+            <DialogTitle>Create New Post</DialogTitle>
+            <DialogDescription>
+              Share your thoughts and start a discussion in the {categoryDisplayName} forum.
+            </DialogDescription>
             <CreatePostForm
               category={category}
               onClose={() => setNewPostDialogOpen(false)}

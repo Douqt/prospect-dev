@@ -1,144 +1,143 @@
 "use client";
 
+import { useState, useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabaseClient";
-import { addIndexedFilter } from "@/lib/pagination";
+import { createClient } from "@supabase/supabase-js";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { UserPlus, UserCheck } from "lucide-react";
 
-/**
- * Props for the FollowForumButton component
- */
-export interface FollowForumButtonProps {
-  /** Stock symbol for the forum to follow/unfollow */
-  stockSymbol: string;
-}
-
-/**
- * Button component for following/unfollowing trading forums
- * Handles community membership operations with optimistic updates
- * Uses indexed queries for optimal performance
- */
-export default function FollowForumButton({ stockSymbol }: FollowForumButtonProps) {
+export default function FollowForumButton({ stockSymbol }: { stockSymbol: string }) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const [isUpdating, setIsUpdating] = useState(false);
 
-  // Check if user is following this forum with indexed filter
-  const { data: isFollowing } = useQuery({
-    queryKey: ["forum-follow-status", stockSymbol],
+  // Force refresh on mount to ensure correct state
+  useEffect(() => {
+    queryClient.invalidateQueries({ queryKey: ["follow-status", stockSymbol] });
+  }, [stockSymbol, queryClient]);
+
+  // Simple follow status check
+  const { data: isFollowing = false, isLoading, error } = useQuery({
+    queryKey: ["follow-status", stockSymbol],
     queryFn: async () => {
       const { data: { user } } = await supabase.auth.getUser();
-
       if (!user) return false;
 
-      // Use indexed filter for community membership lookup
-      let query = supabase
+      console.log(`Checking if user ${user.id} follows ${stockSymbol}`);
+
+      const { data, error } = await supabase
         .from("community_memberships")
-        .select("id");
+        .select("user_id")
+        .eq("user_id", user.id)
+        .eq("community_symbol", stockSymbol.toLowerCase())
+        .maybeSingle();
 
-      // Apply indexed filters for user_id and community_symbol
-      query = addIndexedFilter(query, 'community_memberships', {
-        user_id: user.id,
-        community_symbol: stockSymbol
-      });
-
-      const { data, error } = await query.single();
-
-      if (error && (!error.code || error.code !== 'PGRST116')) { // PGRST116 is "not found"
-        console.error("Error checking follow status:", error);
+      if (error) {
+        console.error("Query error:", error);
         return false;
       }
 
-      return !!data;
+      const following = !!data;
+      console.log(`User ${user.id} follows ${stockSymbol}: ${following}`);
+      return following;
     },
   });
 
   const handleFollowToggle = async () => {
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
+    if (isUpdating) return;
+    setIsUpdating(true);
 
-      if (!user) {
-        toast({
-          title: "Authentication Required",
-          description: "Please sign in to follow forums.",
-          variant: "destructive",
-        });
-        return;
-      }
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      toast({ title: "Sign in required", variant: "destructive" });
+      setIsUpdating(false);
+      return;
+    }
+
+    try {
+      // Create admin client for RPC calls that need service role
+      const supabaseAdmin = createClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY! // Use anon key for client-side
+      );
 
       if (isFollowing) {
-        // Unfollow forum
-        const { error } = await supabase
-          .from("community_memberships")
-          .delete()
-          .eq("user_id", user.id)
-          .eq("community_symbol", stockSymbol);
+        // Unfollow: decrement count and delete membership
+        console.log(`Unfollowing ${stockSymbol} for user ${user.id}`);
 
-        if (error) throw error;
-
-        toast({
-          title: "Unfollowed Forum",
-          description: `You are no longer following ${stockSymbol.toUpperCase()}.`,
-        });
-      } else {
-        // Follow forum
-        const { error } = await supabase
-          .from("community_memberships")
-          .insert({
-            user_id: user.id,
-            community_symbol: stockSymbol,
-          });
-
-        if (error) throw error;
-
-        toast({
-          title: "Forum Followed",
-          description: `You are now following ${stockSymbol.toUpperCase()}.`,
-        });
-      }
-
-      // Invalidate and refetch follow status
-      queryClient.invalidateQueries({ queryKey: ["forum-follow-status", stockSymbol] });
-
-      // Also invalidate the main feed queries to show updated content
-      queryClient.invalidateQueries({ queryKey: ["discussions", "dashboard"] });
-
-      // Update community stats in database and invalidate queries
-      try {
+        // Use API route for unfollow to handle service role properly
         const response = await fetch('/api/update-community-stats', {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             community_symbol: stockSymbol,
-            action: isFollowing ? 'unfollow' : 'follow'
+            action: 'unfollow'
           }),
         });
 
-        if (response.ok) {
-          const result = await response.json();
-          console.log('Community stats updated:', result);
-        } else {
-          console.error('Failed to update community stats:', response.statusText);
+        if (!response.ok) {
+          throw new Error('Failed to update community stats');
         }
-      } catch (error) {
-        console.error('Error updating community stats:', error);
-        // Continue with cache invalidation even if stats update fails
+
+        const { error: deleteError } = await supabase
+          .from("community_memberships")
+          .delete()
+          .eq("user_id", user.id)
+          .eq("community_symbol", stockSymbol.toLowerCase());
+
+        if (deleteError) {
+          console.error("Delete error:", deleteError);
+          throw deleteError;
+        }
+
+        console.log(`Successfully unfollowed ${stockSymbol}`);
+        toast({ title: `Unfollowed ${stockSymbol.toUpperCase()}` });
+      } else {
+        // Follow: increment count and insert membership
+        console.log(`Following ${stockSymbol} for user ${user.id}`);
+
+        // Use API route for follow to handle service role properly
+        const response = await fetch('/api/update-community-stats', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            community_symbol: stockSymbol,
+            action: 'follow'
+          }),
+        });
+
+        if (!response.ok) {
+          throw new Error('Failed to update community stats');
+        }
+
+        const { error: insertError } = await supabase
+          .from("community_memberships")
+          .insert({
+            user_id: user.id,
+            community_symbol: stockSymbol.toLowerCase(),
+          });
+
+        if (insertError) {
+          console.error("Insert error:", insertError);
+          throw insertError;
+        }
+
+        console.log(`Successfully followed ${stockSymbol}`);
+        toast({ title: `Following ${stockSymbol.toUpperCase()}` });
       }
 
-      // Invalidate forum stats queries to update member counts
-      queryClient.invalidateQueries({ queryKey: ["top-communities"] });
+      // Force refresh all related queries to show updated counts
+      queryClient.invalidateQueries({ queryKey: ["follow-status", stockSymbol] });
       queryClient.invalidateQueries({ queryKey: ["forum-stats"] });
-
+      queryClient.invalidateQueries({ queryKey: ["top-communities"] });
+      queryClient.invalidateQueries({ queryKey: ["community-stats"] });
     } catch (error) {
-      console.error("Error toggling forum follow:", error);
-      toast({
-        title: "Error",
-        description: "Failed to update forum follow status. Please try again.",
-        variant: "destructive",
-      });
+      console.error("Toggle error:", error);
+      toast({ title: "Failed to update follow status", variant: "destructive" });
+    } finally {
+      setIsUpdating(false);
     }
   };
 
@@ -147,6 +146,7 @@ export default function FollowForumButton({ stockSymbol }: FollowForumButtonProp
       <Button
         size="lg"
         onClick={handleFollowToggle}
+        disabled={isUpdating}
         variant={isFollowing ? "outline" : "default"}
         className={
           isFollowing

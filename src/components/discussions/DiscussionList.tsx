@@ -85,26 +85,35 @@ export function DiscussionList({ category }: DiscussionListProps) {
     }
   });
 
-  // Query for view status of posts
+  // Query for view status of posts using Supabase directly
   const { data: viewedData } = useQuery({
     queryKey: ["views", category, allDiscussions.map(d => d.id)],
     queryFn: async () => {
       if (!allDiscussions.length) return {};
 
       try {
-        const response = await fetch('/api/posts/batch-viewed', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            postIds: allDiscussions.map(d => d.id),
-          }),
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) return {};
+
+        // Use Supabase query instead of fetch request
+        const { data, error } = await supabase
+          .from("user_post_views")
+          .select("post_id")
+          .eq("user_id", user.id)
+          .in("post_id", allDiscussions.map(d => d.id));
+
+        if (error) {
+          console.error('Error fetching view status:', error);
+          return {};
+        }
+
+        // Transform to expected format
+        const viewed: Record<string, boolean> = {};
+        data?.forEach(view => {
+          viewed[view.post_id] = true;
         });
 
-        if (!response.ok) return {};
-        const data = await response.json();
-        return data.viewed || {};
+        return viewed;
       } catch (error) {
         console.error('Error fetching view status:', error);
         return {};

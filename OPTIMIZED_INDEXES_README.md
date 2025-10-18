@@ -1,162 +1,411 @@
-# 🚀 Optimized Database Indexes
+# Database Optimization Guide: Community Queries
 
-This directory contains SQL files to create optimized indexes for your Supabase database, supporting the cursor-based pagination and indexed query optimizations implemented in your application.
+This document outlines the database optimization strategies implemented for efficient community-related queries in the application.
 
-## 📁 Files Overview
+## 🚀 Performance Optimizations Implemented
 
-### `create_optimized_indexes.sql`
-The main file containing all index creation statements, triggers, and functions.
+### 1. Primary Key Optimization
+**Table**: `community_memberships`
+**Primary Key**: `(user_id, community_symbol)`
 
-### `run_optimized_indexes.sql`
-A wrapper script that executes the index creation and provides verification feedback.
-
-### `create_user_post_views_table.sql` (existing)
-Creates the user_post_views table for tracking post view analytics.
-
-### `update_community_stats.sql` (existing)
-Updates community statistics with fresh data.
-
-## 🎯 Indexes Created
-
-### Discussions Table (Posts)
-- **`idx_discussions_user_created`** - Optimizes user post queries with `user_id, created_at DESC`
-- **`idx_discussions_category`** - Optimizes forum filtering by category
-- **`idx_discussions_category_created`** - Optimizes forum pagination by category + created_at
-- **`idx_discussions_user_category_created`** - Complex queries with user + category filters
-
-### Comments Table
-- **`idx_comments_discussion_parent_created`** - Main composite index for `discussion_id, parent_id, created_at`
-- **`idx_comments_discussion_id`** - Optimizes comment filtering by discussion
-- **`idx_comments_parent_id`** - Optimizes parent comment filtering
-- **`idx_comments_user_id`** - Optimizes comment filtering by author
-- **`idx_comments_user_created`** - Optimizes user comment queries with pagination
-- **`idx_comments_discussion_created`** - Optimizes comment pagination within discussions
-
-### Profiles Table
-- **`idx_profiles_user_id`** - Optimizes profile lookups by user ID
-- **`idx_profiles_username`** - Optimizes profile lookups by username
-
-### Community Memberships Table
-- **`idx_community_memberships_user_id`** - Optimizes membership queries by user
-- **`idx_community_memberships_symbol`** - Optimizes membership queries by community
-- **`idx_community_memberships_user_symbol`** - Optimizes following/followers queries
-
-### Voting Tables
-- **`idx_discussion_votes_discussion_id`** - Optimizes discussion vote queries
-- **`idx_discussion_votes_user_id`** - Optimizes user vote queries
-- **`idx_discussion_votes_discussion_user`** - Optimizes vote existence checks
-- **`idx_comment_votes_comment_id`** - Optimizes comment vote queries
-- **`idx_comment_votes_user_id`** - Optimizes user comment vote queries
-- **`idx_comment_votes_comment_user`** - Optimizes comment vote existence checks
-
-### View Tracking Table
-- **`idx_user_post_views_user_id`** - Optimizes view queries by user
-- **`idx_user_post_views_post_id`** - Optimizes view queries by post
-- **`idx_user_post_views_user_post`** - Optimizes view existence checks
-- **`idx_user_post_views_viewed_at`** - Optimizes view timestamp queries
-
-## 🔍 Full-Text Search
-
-### Searchable Columns Added
-- **`discussions.searchable`** - Combines title + content for full-text search
-- **`comments.searchable`** - Comment content for full-text search
-
-### Search Indexes
-- **`idx_discussions_searchable`** - GIN index for discussions search
-- **`idx_comments_searchable`** - GIN index for comments search
-
-## 🚀 How to Run
-
-### Option 1: Supabase Dashboard (Recommended)
-1. Go to your Supabase project dashboard
-2. Navigate to **SQL Editor**
-3. Copy and paste the contents of `run_optimized_indexes.sql`
-4. Click **Run** to execute
-
-### Option 2: Command Line
-```bash
-# If you have Supabase CLI installed
-supabase db push --file run_optimized_indexes.sql
+```sql
+-- This enables O(log N) lookups for user's communities
+-- Instead of scanning the entire table
+ALTER TABLE community_memberships
+ADD CONSTRAINT community_memberships_pkey
+PRIMARY KEY (user_id, community_symbol);
 ```
 
-### Option 3: Individual Files
-1. Run `create_optimized_indexes.sql` first
-2. Then run `update_community_stats.sql` to refresh statistics
+**Benefits**:
+- Fast user community lookups
+- Efficient join operations
+- Prevents duplicate memberships
 
-## ✅ Verification
+### 2. Secondary Index for Community User Queries
+**Index**: `(community_symbol, user_id)`
 
-After running the indexes, you should see:
-- **25+ new indexes** created across all tables
-- **Full-text search** capabilities on discussions and comments
-- **Automatic tsvector updates** via database triggers
-- **Improved query performance** for all list operations
+```sql
+-- This enables fast "all users in community" queries
+CREATE INDEX idx_community_memberships_symbol_user
+ON community_memberships (community_symbol, user_id);
+```
 
-## 🎯 Performance Benefits
+**Benefits**:
+- Fast community member enumeration
+- Efficient reverse lookups
+- Supports pagination with stable ordering
+
+### 3. Efficient Join Queries
+
+#### User Communities Query Pattern
+```typescript
+// Uses primary key for fast lookups
+const result = await getUserCommunities(supabase, userId, {
+  pagination: { limit: 50, cursor, direction: 'next' }
+});
+```
+
+**Query Structure**:
+```sql
+SELECT cm.community_symbol, cm.followed_at, cs.*
+FROM community_memberships cm
+JOIN community_stats cs ON cs.community_symbol = cm.community_symbol
+WHERE cm.user_id = $1
+ORDER BY cm.followed_at DESC
+LIMIT 51; -- One extra for pagination check
+```
+
+### 4. Cursor-Based Pagination
+
+#### Implementation
+```typescript
+// Instead of OFFSET (which gets slower with larger datasets)
+OFFSET 1000 LIMIT 20 -- SLOW: scans first 1020 rows
+
+// Use cursor pagination (consistent performance)
+WHERE followed_at < $1 ORDER BY followed_at DESC LIMIT 21 -- FAST
+```
+
+**Benefits**:
+- Consistent performance regardless of dataset size
+- No duplicate results during concurrent modifications
+- Memory efficient for large datasets
+
+### 5. Multi-Level Caching Strategy
+
+#### Cache Layers
+1. **In-Memory Cache** (5 minutes TTL)
+   - User communities data
+   - Community statistics
+   - Frequent query results
+
+2. **Database Cache** (`community_stats` table)
+   - Member counts
+   - Post counts
+   - Last activity timestamps
+
+#### Cache Invalidation
+```typescript
+// Automatic invalidation on community changes
+CommunityCache.invalidateCommunityCache(communitySymbol);
+CommunityCache.invalidateUserCache(userId);
+```
+
+## 📊 Performance Benchmarks
 
 ### Before Optimization
-- Queries used sequential table scans
-- No pagination optimization
-- No full-text search capability
-- Slow filtering and sorting operations
+- **User Communities Query**: O(N) table scan
+- **Community Stats**: Multiple COUNT queries
+- **Pagination**: OFFSET-based (degrades with scale)
+- **Cache**: None
 
 ### After Optimization
-- **Index-backed queries** for all list operations
-- **Cursor-based pagination** for efficient infinite scrolling
-- **Full-text search** with `textSearch()` function
-- **Sub-second response times** for complex queries
+- **User Communities Query**: O(log N) indexed lookup
+- **Community Stats**: O(1) cached lookup
+- **Pagination**: O(log N) cursor-based
+- **Cache**: Multi-level with 5-minute TTL
 
-## 🔧 Query Examples
+## 🔧 API Endpoints Using Optimizations
 
-The indexes support these optimized query patterns:
-
+### 1. `/api/forum-stats` - Community Statistics
 ```typescript
-// User posts with pagination
-let query = supabase.from('discussions').select('*');
-query = addIndexedFilter(query, 'discussions', { author_id: userId });
-query = buildCursorQuery(query, { limit: 20 });
+GET /api/forum-stats?symbol=NVDA
 
-// Forum discussions with pagination
-let query = supabase.from('discussions').select('*');
-query = addIndexedFilter(query, 'discussions', { category: forumSymbol });
-query = buildCursorQuery(query, { limit: 20 });
-
-// Comments with pagination
-let query = supabase.from('comments').select('*');
-query = addIndexedFilter(query, 'comments', { post_id: discussionId });
-query = buildCursorQuery(query, { limit: 50 });
-
-// Full-text search
-let query = supabase.from('discussions').select('*');
-query = addFullTextSearch(query, 'search term');
+// Response with caching
+{
+  "posts": 1250,
+  "members": "15.2K"
+}
 ```
 
-## 🛠️ Maintenance
+**Optimizations Used**:
+- In-memory cache (5min TTL)
+- Database cache via `community_stats` table
+- Indexed queries for counts
 
-### Regular Updates
-- Indexes are automatically maintained by PostgreSQL
-- No manual intervention required for new data
-- Statistics are automatically updated
+### 2. `/api/user-communities` - User's Followed Communities
+```typescript
+GET /api/user-communities?limit=20&cursor=2024-01-01T00:00:00Z
 
-### Monitoring
-- Monitor index usage in Supabase dashboard
-- Check query performance in Supabase logs
-- Update statistics if needed: `ANALYZE table_name;`
+// Response with cursor pagination
+{
+  "communities": [...],
+  "nextCursor": "2024-01-01T00:00:00Z",
+  "prevCursor": "2023-12-31T23:59:59Z",
+  "hasMore": true
+}
+```
 
-## 🚨 Important Notes
+**Optimizations Used**:
+- Primary key indexed joins
+- Cursor-based pagination
+- In-memory caching
+- Efficient data transformation
 
-- **Existing data** will be automatically indexed when queries run
-- **No data loss** - indexes are additive only
-- **Backward compatible** - all existing queries continue to work
-- **Production ready** - safe for live databases
+### 3. `/api/update-community-stats` - Community Updates
+```typescript
+POST /api/update-community-stats
+{
+  "community_symbol": "nvda",
+  "action": "follow"
+}
 
-## 📞 Support
+// Response
+{
+  "success": true,
+  "members": 15250,
+  "posts": 1250
+}
+```
 
-If you encounter issues:
-1. Check Supabase logs for error messages
-2. Verify all SQL commands completed successfully
-3. Ensure proper permissions are granted
-4. Test queries in development before production deployment
+**Optimizations Used**:
+- Optimized update functions
+- Automatic cache invalidation
+- Atomic operations
+
+### 4. `/api/followed-discussions` - Posts from Followed Forums
+```typescript
+GET /api/followed-discussions?limit=20&cursor=2024-01-01T00:00:00Z
+
+// Response with posts from all followed communities
+{
+  "discussions": [
+    {
+      "id": "123",
+      "title": "NVDA earnings discussion",
+      "content": "...",
+      "category": "nvda",
+      "created_at": "2024-01-01T10:30:00Z",
+      "profiles": { "username": "trader123", "avatar_url": "..." },
+      "_count": { "comments": 15, "votes": { "up": 8, "down": 2 } }
+    }
+  ],
+  "nextCursor": "2024-01-01T09:00:00Z",
+  "prevCursor": "2024-01-01T10:30:00Z",
+  "hasMore": true,
+  "communities": ["nvda", "aapl", "tsla"]
+}
+```
+
+**Optimizations Used**:
+- Fetches from multiple communities efficiently
+- Combines and sorts posts by creation date
+- Cursor-based pagination across communities
+- In-memory caching for combined results
+
+## 🛠️ Usage Examples
+
+### Frontend Integration
+```typescript
+// Fetch user communities with pagination
+const fetchCommunities = async (cursor?: string) => {
+  const response = await fetch(`/api/user-communities?limit=20&cursor=${cursor || ''}`);
+  const data = await response.json();
+
+  return {
+    communities: data.communities,
+    nextCursor: data.nextCursor,
+    hasMore: data.hasMore
+  };
+};
+
+// Fetch community statistics
+const fetchCommunityStats = async (symbol: string) => {
+  const response = await fetch(`/api/forum-stats?symbol=${symbol}`);
+  return await response.json();
+};
+
+// Fetch posts from all followed forums (THE SOLUTION TO "NO POSTS")
+const fetchFollowedDiscussions = async (cursor?: string) => {
+  const response = await fetch(`/api/followed-discussions?limit=20&cursor=${cursor || ''}`);
+  const data = await response.json();
+
+  return {
+    discussions: data.discussions,
+    nextCursor: data.nextCursor,
+    prevCursor: data.prevCursor,
+    hasMore: data.hasMore,
+    communities: data.communities // Shows which communities had posts
+  };
+};
+
+// Usage in a React component
+const useFollowedDiscussions = () => {
+  const [discussions, setDiscussions] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [cursor, setCursor] = useState(null);
+  const [hasMore, setHasMore] = useState(true);
+
+  const loadMore = async () => {
+    if (loading || !hasMore) return;
+
+    setLoading(true);
+    try {
+      const result = await fetchFollowedDiscussions(cursor);
+      setDiscussions(prev => [...prev, ...result.discussions]);
+      setCursor(result.nextCursor);
+      setHasMore(result.hasMore);
+    } catch (error) {
+      console.error('Error loading discussions:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return { discussions, loading, hasMore, loadMore };
+};
+```
+
+### Database Schema Requirements
+
+Ensure your database has these optimized structures:
+
+```sql
+-- Primary key for fast user lookups
+ALTER TABLE community_memberships
+ADD CONSTRAINT community_memberships_pkey
+PRIMARY KEY (user_id, community_symbol);
+
+-- Secondary index for fast community lookups
+CREATE INDEX idx_community_memberships_symbol_user
+ON community_memberships (community_symbol, user_id);
+
+-- Stats table for caching counts
+CREATE TABLE community_stats (
+  community_symbol TEXT PRIMARY KEY,
+  member_count INTEGER DEFAULT 0,
+  post_count INTEGER DEFAULT 0,
+  last_activity TIMESTAMPTZ,
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Index on discussions for fast post counts
+CREATE INDEX idx_discussions_category_created
+ON discussions (category, created_at DESC);
+```
+
+## 📈 Monitoring and Maintenance
+
+### Cache Performance Monitoring
+```typescript
+// Get cache statistics
+const stats = CommunityCache.getCacheStats();
+console.log(`Cache size: ${stats.size}`);
+```
+
+### Database Query Performance
+Monitor these query patterns:
+- `community_memberships` table scans (should be minimal)
+- `discussions` category filters (should use index)
+- `community_stats` cache hit rate
+
+### Scaling Considerations
+
+For datasets > 1M records:
+1. **Partitioning**: Consider partitioning `community_memberships` by date
+2. **Read Replicas**: Use read replicas for stats queries
+3. **Redis Cluster**: Replace in-memory cache with Redis cluster
+4. **Database Sharding**: Shard by community_symbol for very large datasets
+
+## 🚨 Troubleshooting
+
+### Common Issues
+
+1. **No Posts from Followed Forums**
+   - **Cursor Issue**: Check if cursor is set to a date after the newest post
+   - **Cache Issue**: Clear cache using `CommunityCache.clearAll()`
+   - **Filter Issue**: Verify frontend isn't filtering out posts incorrectly
+   - **Database Issue**: Check if user actually follows any communities
+
+   **Debug Steps**:
+   ```typescript
+   // Clear all caches
+   CommunityCache.clearAll();
+
+   // Check if user follows communities
+   const { data: follows } = await supabase
+     .from('community_memberships')
+     .select('community_symbol')
+     .eq('user_id', userId);
+
+   console.log('Followed communities:', follows);
+   ```
+
+2. **Follow Button Not Updating**
+   - **Query Issue**: The button uses `maybeSingle()` for better error handling
+   - **Cache Issue**: Follow status is cached for 30 seconds
+   - **Primary Key Issue**: Ensure database has proper primary key constraints
+   - **Optimistic Updates**: Button updates immediately but reverts on error
+
+   **Debug Steps**:
+   ```typescript
+   // Check button query directly
+   const { data: { user } } = await supabase.auth.getUser();
+   const { data, error } = await supabase
+     .from('community_memberships')
+     .select('id')
+     .eq('user_id', user.id)
+     .eq('community_symbol', 'nvda')
+     .maybeSingle();
+
+   console.log('Follow check result:', { data, error });
+   ```
+
+2. **Slow Queries**
+   - Check if indexes are being used: `EXPLAIN ANALYZE`
+   - Verify primary key constraints are in place
+   - Monitor cache hit rates
+
+3. **High Memory Usage**
+   - Reduce cache TTL for large datasets
+   - Implement cache size limits
+   - Monitor memory usage patterns
+
+4. **Stale Data**
+   - Implement proper cache invalidation
+   - Use background jobs for stats recalculation
+   - Monitor cache expiry patterns
+
+### Debug API Endpoints
+
+Test these endpoints directly to isolate issues:
+
+```bash
+# Test followed discussions endpoint
+curl -H "Authorization: Bearer YOUR_TOKEN" \
+  "http://localhost:3000/api/followed-discussions?limit=5"
+
+# Test user communities endpoint
+curl -H "Authorization: Bearer YOUR_TOKEN" \
+  "http://localhost:3000/api/user-communities?limit=10"
+
+# Clear cache for debugging
+curl -X POST "http://localhost:3000/api/debug/clear-cache" \
+  -H "Authorization: Bearer YOUR_TOKEN"
+```
+
+## 🎯 Best Practices Summary
+
+✅ **Do**:
+- Use primary keys for all relationship queries
+- Implement cursor pagination for large datasets
+- Cache frequently accessed data
+- Use indexed filters for all WHERE clauses
+- Monitor query performance regularly
+
+❌ **Don't**:
+- Use OFFSET pagination for large datasets
+- Perform table scans for relationship queries
+- Skip cache invalidation on data changes
+- Use string concatenation for cache keys
+- Ignore database index maintenance
+
+## 📚 Additional Resources
+
+- [Supabase Performance Guide](https://supabase.com/docs/guides/performance)
+- [PostgreSQL Indexing Strategies](https://www.postgresql.org/docs/current/indexes.html)
+- [Cursor Pagination Best Practices](https://use-the-index-luke.com/blog/2019-10-09/cursor-pagination)
 
 ---
 
-**🎉 Your database is now optimized for high-performance social media operations!**
+*This optimization guide ensures your community features scale efficiently from hundreds to millions of users while maintaining sub-second response times.*

@@ -3,6 +3,7 @@
 import { useState, useRef } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabaseClient";
+import { createClient } from "@supabase/supabase-js";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -24,7 +25,7 @@ export function CreatePostForm({ category, onClose }: CreatePostFormProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const queryClient = useQueryClient();
 
-  // Create post mutation
+  // Create post mutation with optimistic updates
   const createPostMutation = useMutation({
     mutationFn: async (data: { title: string; content: string; imageUrl?: string }) => {
       const { data: { user } } = await supabase.auth.getUser();
@@ -45,9 +46,100 @@ export function CreatePostForm({ category, onClose }: CreatePostFormProps) {
       if (error) throw error;
       return post;
     },
-    onSuccess: () => {
+    onMutate: async (newPost) => {
+      // Cancel any outgoing refetches
+      await queryClient.cancelQueries({ queryKey: ["discussions", category] });
+      await queryClient.cancelQueries({ queryKey: ["forum-stats", category] });
+      await queryClient.cancelQueries({ queryKey: ["forum-stats"] });
+
+      // Snapshot the previous values
+      const previousDiscussions = queryClient.getQueryData(["discussions", category]);
+      const previousForumStats = queryClient.getQueryData(["forum-stats", category]);
+      const previousGeneralForumStats = queryClient.getQueryData(["forum-stats"]);
+
+      // Get current user profile for optimistic update
+      const { data: { user } } = await supabase.auth.getUser();
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("username, display_name, avatar_url")
+        .eq("user_id", user?.id)
+        .single();
+
+      // Optimistically update discussions list
+      const optimisticPost = {
+        id: `temp-${Date.now()}`, // Temporary ID
+        title: newPost.title,
+        content: newPost.content,
+        category,
+        created_at: new Date().toISOString(),
+        upvotes: 0,
+        downvotes: 0,
+        views: 0,
+        comment_count: 0,
+        image_url: newPost.imageUrl,
+        profiles: profile || { username: null, display_name: null, avatar_url: null },
+        _count: { comments: 0 }
+      };
+
+      queryClient.setQueryData(["discussions", category], (old: any) => {
+        if (!old) return [optimisticPost];
+        return [optimisticPost, ...old];
+      });
+
+      // Optimistically update forum stats (increment post count)
+      if (previousForumStats) {
+        queryClient.setQueryData(["forum-stats", category], (old: any) => ({
+          ...old,
+          posts: (old?.posts || 0) + 1
+        }));
+      }
+
+      // Return a context object with the snapshotted values
+      return { previousDiscussions, previousForumStats, previousGeneralForumStats };
+    },
+    onError: (err, newPost, context) => {
+      // If the mutation fails, use the context returned from onMutate to roll back
+      if (context?.previousDiscussions) {
+        queryClient.setQueryData(["discussions", category], context.previousDiscussions);
+      }
+      if (context?.previousForumStats) {
+        queryClient.setQueryData(["forum-stats", category], context.previousForumStats);
+      }
+      if (context?.previousGeneralForumStats) {
+        queryClient.setQueryData(["forum-stats"], context.previousGeneralForumStats);
+      }
+    },
+    onSuccess: async () => {
+      // Invalidate all related queries to ensure fresh data
       queryClient.invalidateQueries({ queryKey: ["discussions", category] });
+      queryClient.invalidateQueries({ queryKey: ["forum-stats", category] });
+      queryClient.invalidateQueries({ queryKey: ["forum-stats"] });
+      queryClient.invalidateQueries({ queryKey: ["forum-discussions"] });
+      queryClient.invalidateQueries({ queryKey: ["discussions", category, "initial"] });
+
+      // Use API route for post count updates to handle service role properly
+      try {
+        await fetch('/api/update-community-stats', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            community_symbol: category,
+            action: 'post' // This will increment the post count
+          }),
+        });
+      } catch (error) {
+        console.warn('Failed to update community stats via API:', error);
+        // Non-critical error, continue with cache invalidation
+      }
+
       onClose();
+    },
+    onSettled: () => {
+      // Always refetch after error or success to ensure consistency
+      queryClient.invalidateQueries({ queryKey: ["discussions", category] });
+      queryClient.invalidateQueries({ queryKey: ["forum-stats", category] });
     }
   });
 

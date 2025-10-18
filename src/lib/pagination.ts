@@ -11,6 +11,20 @@ export interface CursorPaginationOptions {
 }
 
 /**
+ * Options for efficient community queries with proper indexing
+ */
+export interface CommunityQueryOptions {
+  /** User ID for filtering user's communities */
+  userId?: string;
+  /** Community symbol for filtering specific community */
+  communitySymbol?: string;
+  /** Pagination options */
+  pagination?: CursorPaginationOptions;
+  /** Whether to include community stats */
+  includeStats?: boolean;
+}
+
+/**
  * Generic type for items with created_at timestamp
  */
 export type TimestampedItem = {
@@ -104,7 +118,12 @@ export function addIndexedFilter(
       query = query.eq('user_id', filters.author_id);
     }
     if (filters.category) {
-      query = query.eq('category', filters.category);
+      // Handle both single category and array of categories
+      if (Array.isArray(filters.category)) {
+        query = query.in('category', filters.category);
+      } else {
+        query = query.eq('category', filters.category);
+      }
     }
   }
 
@@ -188,4 +207,221 @@ export function addFullTextSearch(
     type: 'websearch', // Use websearch for better search behavior
     config: language
   });
+}
+
+/**
+ * Efficiently queries user's communities with optimized joins
+ * Uses primary key (user_id, community_symbol) for fast lookups
+ * @param supabase - Supabase client instance
+ * @param userId - User ID to fetch communities for
+ * @param options - Query options including pagination
+ * @returns Promise with communities data and pagination info
+ */
+export async function getUserCommunities(
+  supabase: any,
+  userId: string,
+  options: CommunityQueryOptions = {}
+): Promise<{
+  data: any[];
+  nextCursor?: string | null;
+  prevCursor?: string | null;
+  hasMore: boolean;
+}> {
+  const { pagination = {} } = options;
+  const { limit = 50, cursor, direction = 'next' } = pagination;
+
+  // Build the efficient join query using primary key index
+  let query = supabase
+    .from('community_memberships')
+    .select(`
+      community_symbol,
+      followed_at,
+      community_stats!inner (
+        member_count,
+        post_count,
+        last_activity
+      )
+    `)
+    .eq('user_id', userId);
+
+  // Apply cursor pagination using followed_at timestamp
+  if (cursor) {
+    if (direction === 'next') {
+      query = query.lt('followed_at', cursor);
+    } else {
+      query = query.gt('followed_at', cursor);
+    }
+  }
+
+  query = query
+    .order('followed_at', { ascending: false })
+    .limit(limit + 1); // Fetch one extra to check if there are more
+
+  const { data, error } = await query;
+
+  if (error) {
+    throw new Error(`Failed to fetch user communities: ${error.message}`);
+  }
+
+  // Handle pagination
+  const hasMore = data && data.length > limit;
+  const communities = hasMore ? data.slice(0, limit) : data;
+
+  return {
+    data: communities || [],
+    nextCursor: hasMore && communities.length > 0 ? communities[communities.length - 1].followed_at : null,
+    prevCursor: communities.length > 0 ? communities[0].followed_at : null,
+    hasMore
+  };
+}
+
+/**
+ * Efficiently queries all users in a specific community
+ * Uses secondary index (community_symbol, user_id) for fast lookups
+ * @param supabase - Supabase client instance
+ * @param communitySymbol - Community symbol to fetch users for
+ * @param options - Query options including pagination
+ * @returns Promise with users data and pagination info
+ */
+export async function getCommunityUsers(
+  supabase: any,
+  communitySymbol: string,
+  options: CommunityQueryOptions = {}
+): Promise<{
+  data: any[];
+  nextCursor?: string | null;
+  prevCursor?: string | null;
+  hasMore: boolean;
+}> {
+  const { pagination = {} } = options;
+  const { limit = 50, cursor, direction = 'next' } = pagination;
+
+  // Build query using secondary index (community_symbol, user_id)
+  let query = supabase
+    .from('community_memberships')
+    .select(`
+      user_id,
+      followed_at,
+      profiles!inner (
+        username,
+        display_name,
+        avatar_url
+      )
+    `)
+    .eq('community_symbol', communitySymbol.toLowerCase());
+
+  // Apply cursor pagination using followed_at timestamp
+  if (cursor) {
+    if (direction === 'next') {
+      query = query.lt('followed_at', cursor);
+    } else {
+      query = query.gt('followed_at', cursor);
+    }
+  }
+
+  query = query
+    .order('followed_at', { ascending: false })
+    .limit(limit + 1); // Fetch one extra to check if there are more
+
+  const { data, error } = await query;
+
+  if (error) {
+    throw new Error(`Failed to fetch community users: ${error.message}`);
+  }
+
+  // Handle pagination
+  const hasMore = data && data.length > limit;
+  const users = hasMore ? data.slice(0, limit) : data;
+
+  return {
+    data: users || [],
+    nextCursor: hasMore && users.length > 0 ? users[users.length - 1].followed_at : null,
+    prevCursor: users.length > 0 ? users[0].followed_at : null,
+    hasMore
+  };
+}
+
+/**
+ * Optimized query for community statistics with caching support
+ * Uses community_stats table for fast access to member and post counts
+ * @param supabase - Supabase client instance
+ * @param communitySymbol - Community symbol to get stats for
+ * @returns Promise with community statistics
+ */
+export async function getCommunityStats(
+  supabase: any,
+  communitySymbol: string
+): Promise<{
+  member_count: number;
+  post_count: number;
+  last_activity: string;
+} | null> {
+  const { data, error } = await supabase
+    .from('community_stats')
+    .select('member_count, post_count, last_activity')
+    .eq('community_symbol', communitySymbol.toLowerCase())
+    .single();
+
+  if (error && error.code !== 'PGRST116') { // PGRST116 = no rows returned
+    throw new Error(`Failed to fetch community stats: ${error.message}`);
+  }
+
+  return data;
+}
+
+/**
+ * Updates community statistics efficiently
+ * Handles both member count changes and post count recalculation
+ * @param supabase - Supabase client instance
+ * @param communitySymbol - Community symbol to update
+ * @param action - 'follow' or 'unfollow' action
+ * @returns Promise with updated statistics
+ */
+export async function updateCommunityStats(
+  supabase: any,
+  communitySymbol: string,
+  action: 'follow' | 'unfollow'
+): Promise<{
+  member_count: number;
+  post_count: number;
+}> {
+  const lowerSymbol = communitySymbol.toLowerCase();
+
+  // Get current stats
+  const currentStats = await getCommunityStats(supabase, lowerSymbol);
+
+  // Calculate new member count
+  const newMemberCount = currentStats
+    ? (action === 'follow' ? currentStats.member_count + 1 : Math.max(0, currentStats.member_count - 1))
+    : (action === 'follow' ? 1 : 0);
+
+  // Recalculate post count from discussions table
+  const { count: postCount } = await supabase
+    .from('discussions')
+    .select('*', { count: 'exact', head: true })
+    .eq('category', lowerSymbol);
+
+  const newPostCount = postCount || 0;
+
+  // Update community_stats table
+  const { error } = await supabase
+    .from('community_stats')
+    .upsert({
+      community_symbol: lowerSymbol,
+      member_count: newMemberCount,
+      post_count: newPostCount,
+      last_activity: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    }, {
+      onConflict: 'community_symbol'
+    });
+
+  if (error) {
+    throw new Error(`Failed to update community stats: ${error.message}`);
+  }
+
+  return {
+    member_count: newMemberCount,
+    post_count: newPostCount
+  };
 }

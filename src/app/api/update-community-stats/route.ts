@@ -1,12 +1,13 @@
 import { createServerClient } from '@/lib/supabase-server';
 import { createClient } from '@supabase/supabase-js';
 import { NextResponse } from 'next/server';
-import { addIndexedFilter } from '@/lib/pagination';
+import { addIndexedFilter, updateCommunityStats } from '@/lib/pagination';
+import { CommunityCache } from '@/lib/cache';
 
 /**
  * Action type for community stats update
  */
-export type CommunityAction = 'follow' | 'unfollow';
+export type CommunityAction = 'follow' | 'unfollow' | 'post';
 
 /**
  * Request body structure for community stats update
@@ -44,93 +45,69 @@ export async function POST(request: Request) {
       }, { status: 400 });
     }
 
-    if (!action || !['follow', 'unfollow'].includes(action)) {
+    if (!action || !['follow', 'unfollow', 'post'].includes(action)) {
       return NextResponse.json({
-        error: 'Valid action (follow or unfollow) is required'
+        error: 'Valid action (follow, unfollow, or post) is required'
       }, { status: 400 });
     }
 
-    const upperSymbol = community_symbol.toUpperCase();
+    const lowerSymbol = community_symbol.toLowerCase();
 
-    // Get current stats or create default
-    const { data: currentStats, error: fetchError } = await supabase
-      .from('community_stats')
-      .select('member_count, post_count')
-      .eq('community_symbol', upperSymbol)
-      .single();
+    try {
+      // Use direct RPC call with service role
+      let rpcFunction = '';
+      if (action === 'post') {
+        rpcFunction = 'increment_post_count';
+      } else {
+        rpcFunction = action === 'follow' ? 'increment_member_count' : 'decrement_member_count';
+      }
 
-    if (fetchError && fetchError.code !== 'PGRST116') {
-      console.error('Error fetching current stats:', fetchError);
-      return NextResponse.json({
-        error: 'Failed to fetch current stats',
-        details: fetchError.message
-      }, { status: 500 });
-    }
-
-    let newMemberCount = currentStats?.member_count || 0;
-    let newPostCount = currentStats?.post_count || 0;
-
-    // Update member count based on action
-    if (action === 'follow') {
-      newMemberCount += 1;
-    } else if (action === 'unfollow') {
-      newMemberCount = Math.max(0, newMemberCount - 1); // Don't go below 0
-    }
-
-    // Recalculate post count from discussions with indexed filter
-    let postsQuery = supabase
-      .from('discussions')
-      .select('*', { count: 'exact', head: true });
-
-    postsQuery = addIndexedFilter(postsQuery, 'discussions', {
-      category: community_symbol.toLowerCase()
-    });
-
-    const { count: postsCount, error: postsError } = await postsQuery;
-
-    if (postsError) {
-      console.error('Error fetching posts count:', postsError);
-      return NextResponse.json({
-        error: 'Failed to fetch post count',
-        details: postsError.message
-      }, { status: 500 });
-    }
-
-    newPostCount = postsCount || 0;
-
-    // Update community stats using admin client
-    const supabaseAdmin = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_ROLE_KEY! // server only!
-    );
-
-    const { error: upsertError } = await supabaseAdmin
-      .from('community_stats')
-      .upsert({
-        community_symbol: upperSymbol,
-        member_count: newMemberCount,
-        post_count: newPostCount,
-        last_activity: new Date().toISOString(),
-        updated_at: new Date().toISOString()
-      }, {
-        onConflict: 'community_symbol'
+      const rpcResponse = await fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/rest/v1/rpc/${rpcFunction}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'apikey': process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+          'Authorization': `Bearer ${process.env.SUPABASE_SERVICE_ROLE_KEY!}`,
+        },
+        body: JSON.stringify({
+          community_sym: lowerSymbol
+        }),
       });
 
-    if (upsertError) {
-      console.error('Error updating community stats:', upsertError);
+      if (!rpcResponse.ok) {
+        const errorData = await rpcResponse.text();
+        console.error('RPC call failed:', rpcResponse.status, errorData);
+        throw new Error(`RPC call failed: ${rpcResponse.status}`);
+      }
+
+      // Get updated stats
+      const { data: updatedStats, error: fetchError } = await supabase
+        .from('community_stats')
+        .select('member_count, post_count')
+        .eq('community_symbol', lowerSymbol)
+        .single();
+
+      if (fetchError && fetchError.code !== 'PGRST116') {
+        console.error('Error fetching updated stats:', fetchError);
+      }
+
+      // Invalidate cache for this community
+      CommunityCache.invalidateCommunityCache(lowerSymbol);
+
+      const response: UpdateCommunityStatsResponse = {
+        success: true,
+        members: updatedStats?.member_count || 0,
+        posts: updatedStats?.post_count || 0
+      };
+
+      return NextResponse.json(response);
+    } catch (updateError) {
+      console.error('Error updating community stats:', updateError);
       return NextResponse.json({
         error: 'Failed to update community stats',
-        details: upsertError.message
+        details: updateError instanceof Error ? updateError.message : 'Unknown error'
       }, { status: 500 });
     }
-
-    const response: UpdateCommunityStatsResponse = {
-      success: true,
-      members: newMemberCount,
-      posts: newPostCount
-    };
-
-    return NextResponse.json(response);
 
   } catch (error) {
     console.error('Update community stats API error:', error);

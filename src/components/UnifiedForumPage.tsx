@@ -18,7 +18,7 @@ import { useRouter } from "next/navigation";
 import { LazyImage } from "@/components/LazyImage";
 import { DiscussionListSkeleton } from "@/components/ui/skeleton-loading";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
-import { Dialog, DialogContent, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogTrigger, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { CreatePostForm } from "@/components/discussions/CreatePostForm";
 import { Plus } from "lucide-react";
 
@@ -370,6 +370,10 @@ export function UnifiedForumPage({
                         </Button>
                       </DialogTrigger>
                       <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+                        <DialogTitle>Create New Post</DialogTitle>
+                        <DialogDescription>
+                          Share your thoughts and start a discussion about {displayData.name}.
+                        </DialogDescription>
                         <CreatePostForm
                           category={resolvedParams.symbol.toLowerCase()}
                           onClose={() => setNewPostDialogOpen(false)}

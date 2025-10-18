@@ -159,40 +159,27 @@ export function UnifiedDashboard({
   });
 
   /**
-   * Fetches discussions from followed communities
+   * Fetches discussions from followed communities using the new optimized API
    */
   const fetchFollowingDiscussions = async (): Promise<Discussion[]> => {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return [];
+    try {
+      const response = await fetch('/api/followed-discussions?limit=20');
+      if (!response.ok) throw new Error('Failed to fetch followed discussions');
 
-    // Get followed communities using indexed query
-    let membershipQuery = supabase
-      .from("community_memberships")
-      .select("community_symbol");
+      const data = await response.json();
 
-    membershipQuery = addIndexedFilter(membershipQuery, 'community_memberships', { user_id: user.id });
+      // Filter by forum type if needed
+      const filteredDiscussions = data.discussions?.filter((d: any) =>
+        categoryFilter(d.category?.toUpperCase() || '')
+      ) || [];
 
-    const { data: followingData, error: followError } = await membershipQuery;
+      if (filteredDiscussions.length === 0) return [];
 
-    if (followError || !followingData?.length) return [];
-
-    const followedForums = followingData.map(f => f.community_symbol.toLowerCase());
-
-    // Fetch discussions from followed forums
-    let discussionsQuery = supabase
-      .from("discussions")
-      .select("id, title, content, category, created_at, upvotes, downvotes, views, comment_count, user_id, image_url");
-
-    discussionsQuery = addIndexedFilter(discussionsQuery, 'discussions', { category: followedForums });
-    discussionsQuery = buildCursorQuery(discussionsQuery, { limit: 20 });
-
-    const { data, error } = await discussionsQuery;
-    if (error) throw error;
-
-    const filteredDiscussions = data?.filter(d => categoryFilter(d.category?.toUpperCase() || '')) || [];
-    if (filteredDiscussions.length === 0) return [];
-
-    return await enrichDiscussionsWithProfiles(filteredDiscussions);
+      return filteredDiscussions;
+    } catch (error) {
+      console.error('Error fetching followed discussions:', error);
+      return [];
+    }
   };
 
   /**
@@ -459,7 +446,7 @@ export function UnifiedDashboard({
                   topCommunitiesData?.map((community) => (
                     <Card key={community.symbol} className="text-center">
                       <CardContent className="p-4">
-                        <div className="text-lg font-bold text-[#e0a815]">{community.symbol}</div>
+                        <div className="text-lg font-bold text-[#e0a815]">{community.symbol.toUpperCase()}</div>
                         <div className="text-xs text-muted-foreground mt-1">{community.members} members • {community.posts} posts</div>
                       </CardContent>
                     </Card>

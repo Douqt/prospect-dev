@@ -54,19 +54,19 @@ export async function GET(request: Request) {
     if (forumType !== 'all') {
       // This is a simple filter - in a real app you might have a forum_type column
       // For now, we'll filter based on common symbols for each type
-      const stockSymbols = ['NVDA', 'AAPL', 'MSFT', 'TSLA', 'GOOGL', 'AMZN', 'META'];
-      const cryptoSymbols = ['BTC', 'ETH', 'ADA', 'SOL', 'DOT', 'AVAX', 'MATIC'];
-      const futuresSymbols = ['ES', 'NQ', 'YM', 'RTY', 'CL', 'GC', 'SI'];
+      const stockSymbols = ['nvda', 'aapl', 'msft', 'tsla', 'googl', 'amzn', 'meta'];
+      const cryptoSymbols = ['btc', 'eth', 'ada', 'sol', 'dot', 'avax', 'matic'];
+      const futuresSymbols = ['es', 'nq', 'ym', 'rty', 'cl', 'gc', 'si'];
 
       switch (forumType) {
         case 'stocks':
-          filteredCommunities = communities.filter(c => stockSymbols.includes(c.community_symbol));
+          filteredCommunities = communities.filter(c => stockSymbols.includes(c.community_symbol.toLowerCase()));
           break;
         case 'crypto':
-          filteredCommunities = communities.filter(c => cryptoSymbols.includes(c.community_symbol));
+          filteredCommunities = communities.filter(c => cryptoSymbols.includes(c.community_symbol.toLowerCase()));
           break;
         case 'futures':
-          filteredCommunities = communities.filter(c => futuresSymbols.includes(c.community_symbol));
+          filteredCommunities = communities.filter(c => futuresSymbols.includes(c.community_symbol.toLowerCase()));
           break;
       }
     }
