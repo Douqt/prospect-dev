@@ -3,14 +3,51 @@ import { createClient } from '@supabase/supabase-js';
 import { NextResponse } from 'next/server';
 import { addIndexedFilter } from '@/lib/pagination';
 
+/**
+ * Action type for community stats update
+ */
+export type CommunityAction = 'follow' | 'unfollow';
+
+/**
+ * Request body structure for community stats update
+ */
+export interface UpdateCommunityStatsRequest {
+  community_symbol: string;
+  action: CommunityAction;
+}
+
+/**
+ * Response structure for community stats update
+ */
+export interface UpdateCommunityStatsResponse {
+  success: boolean;
+  members: number;
+  posts: number;
+}
+
+/**
+ * POST handler for updating community statistics
+ * Updates member count when users follow/unfollow communities
+ * Recalculates post count from discussions table
+ * Maintains community_stats table for performance
+ */
 export async function POST(request: Request) {
   try {
     const supabase = await createServerClient();
-    const body = await request.json();
+    const body: UpdateCommunityStatsRequest = await request.json();
     const { community_symbol, action } = body;
 
-    if (!community_symbol) {
-      return NextResponse.json({ error: 'Community symbol required' }, { status: 400 });
+    // Validate required parameters
+    if (!community_symbol?.trim()) {
+      return NextResponse.json({
+        error: 'Community symbol is required'
+      }, { status: 400 });
+    }
+
+    if (!action || !['follow', 'unfollow'].includes(action)) {
+      return NextResponse.json({
+        error: 'Valid action (follow or unfollow) is required'
+      }, { status: 400 });
     }
 
     const upperSymbol = community_symbol.toUpperCase();
@@ -22,9 +59,12 @@ export async function POST(request: Request) {
       .eq('community_symbol', upperSymbol)
       .single();
 
-    if (fetchError && fetchError.code !== 'PGRST116') { // PGRST116 is "not found"
+    if (fetchError && fetchError.code !== 'PGRST116') {
       console.error('Error fetching current stats:', fetchError);
-      return NextResponse.json({ error: 'Failed to fetch current stats' }, { status: 500 });
+      return NextResponse.json({
+        error: 'Failed to fetch current stats',
+        details: fetchError.message
+      }, { status: 500 });
     }
 
     let newMemberCount = currentStats?.member_count || 0;
@@ -37,28 +77,33 @@ export async function POST(request: Request) {
       newMemberCount = Math.max(0, newMemberCount - 1); // Don't go below 0
     }
 
-    // For post count, we'll need to count from discussions with indexed filter
+    // Recalculate post count from discussions with indexed filter
     let postsQuery = supabase
       .from('discussions')
       .select('*', { count: 'exact', head: true });
 
-    postsQuery = addIndexedFilter(postsQuery, 'discussions', { category: community_symbol.toLowerCase() });
+    postsQuery = addIndexedFilter(postsQuery, 'discussions', {
+      category: community_symbol.toLowerCase()
+    });
 
     const { count: postsCount, error: postsError } = await postsQuery;
 
     if (postsError) {
       console.error('Error fetching posts count:', postsError);
-      return NextResponse.json({ error: 'Failed to fetch post count' }, { status: 500 });
+      return NextResponse.json({
+        error: 'Failed to fetch post count',
+        details: postsError.message
+      }, { status: 500 });
     }
 
     newPostCount = postsCount || 0;
 
+    // Update community stats using admin client
     const supabaseAdmin = createClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
       process.env.SUPABASE_SERVICE_ROLE_KEY! // server only!
     );
 
-    // Update community stats with new counts
     const { error: upsertError } = await supabaseAdmin
       .from('community_stats')
       .upsert({
@@ -69,20 +114,23 @@ export async function POST(request: Request) {
         updated_at: new Date().toISOString()
       }, {
         onConflict: 'community_symbol'
-    });
-
-    console.log(`Updated stats for ${upperSymbol}: ${newMemberCount} members, ${newPostCount} posts`);
+      });
 
     if (upsertError) {
       console.error('Error updating community stats:', upsertError);
-      return NextResponse.json({ error: 'Failed to update community stats' }, { status: 500 });
+      return NextResponse.json({
+        error: 'Failed to update community stats',
+        details: upsertError.message
+      }, { status: 500 });
     }
 
-    return NextResponse.json({
+    const response: UpdateCommunityStatsResponse = {
       success: true,
       members: newMemberCount,
       posts: newPostCount
-    });
+    };
+
+    return NextResponse.json(response);
 
   } catch (error) {
     console.error('Update community stats API error:', error);

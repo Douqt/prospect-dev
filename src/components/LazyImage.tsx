@@ -3,19 +3,37 @@
 import { useState, useRef, useEffect } from 'react';
 import { Skeleton } from '@/components/ui/skeleton';
 
-interface LazyImageProps {
+/**
+ * Props for the LazyImage component
+ */
+export interface LazyImageProps {
+  /** Image source URL */
   src: string;
+  /** Alt text for accessibility */
   alt: string;
+  /** Additional CSS classes */
   className?: string;
+  /** Fixed width in pixels */
   width?: number;
+  /** Fixed height in pixels */
   height?: number;
+  /** Custom styles object */
   style?: React.CSSProperties;
+  /** Placeholder type while loading */
   placeholder?: 'blur' | 'empty';
+  /** Base64 encoded blur placeholder image */
   blurDataURL?: string;
+  /** Callback when image loads successfully */
   onLoad?: () => void;
+  /** Callback when image fails to load */
   onError?: () => void;
 }
 
+/**
+ * Lazy loading image component with intersection observer
+ * Loads images only when they come into viewport for better performance
+ * Supports blur placeholders and error states
+ */
 export function LazyImage({
   src,
   alt,

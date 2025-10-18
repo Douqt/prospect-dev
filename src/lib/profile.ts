@@ -1,7 +1,14 @@
 import { supabase } from "./supabaseClient";
 
-export async function upsertProfileLastLogin(userId: string, email?: string) {
+/**
+ * Updates a user's last login timestamp in their profile
+ * Silently handles errors as this is not critical for UX
+ * @param userId - The user's unique identifier
+ * @param email - Optional email to update
+ */
+export async function upsertProfileLastLogin(userId: string, email?: string): Promise<void> {
   if (!userId) return;
+
   try {
     await supabase.from("profiles").upsert({
       id: userId,
@@ -9,41 +16,24 @@ export async function upsertProfileLastLogin(userId: string, email?: string) {
       last_login: new Date().toISOString(),
       // Keep existing values for other fields, only update last_login
     });
-  } catch (e) {
-    // ignore errors; not critical for UX
-    console.error("upsertProfileLastLogin error", e);
+  } catch (error) {
+    // Log error but don't throw - not critical for UX
+    console.error("Failed to update profile last login:", error);
   }
 }
 
-// export async function upsertProfileOnSignup(userId: string, email?: string, username?: string) {
-//   if (!userId) return;
-//   try {
-//     await supabase.from("profiles").upsert({
-//       id: userId,
-//       email: email ?? null,
-//       username: username ?? null,
-//       display_name: username ?? null, // Set display_name to username initially
-//       avatar_url: null,
-//       bio: null,
-//       last_login: new Date().toISOString(),
-//       metadata: {},
-//       dark_mode: false,
-//       onboarded: false,
-//       created_at: new Date().toISOString(),
-//       updated_at: new Date().toISOString(),
-//     });
-//   } catch (e) {
-//     // ignore errors; not critical for UX
-//     console.error("upsertProfileOnSignup error", e);
-//   }
-// }
-
+/**
+ * Checks if a user has a profile in the database
+ * @param userId - The user's unique identifier
+ * @returns Promise<boolean> indicating if profile exists
+ */
 export async function userHasProfile(userId: string): Promise<boolean> {
   if (!userId) return false;
+
   try {
     const { data, error } = await supabase
       .from("profiles")
-      .select('id') // select 1 limit 1 equivalent
+      .select('id') // Minimal select for existence check
       .eq("id", userId)
       .single();
 
@@ -53,17 +43,24 @@ export async function userHasProfile(userId: string): Promise<boolean> {
   }
 }
 
+/**
+ * Fetches basic profile information for a user
+ * @param userId - The user's unique identifier
+ * @returns Promise with avatar_url and last_login or null if not found/error
+ */
 export async function fetchProfile(userId: string) {
   if (!userId) return null;
+
   try {
     const { data, error } = await supabase
       .from("profiles")
       .select("avatar_url, last_login")
       .eq("id", userId)
       .single();
+
     if (error) return null;
     return data;
-  } catch (e) {
+  } catch {
     return null;
   }
 }

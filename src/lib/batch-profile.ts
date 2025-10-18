@@ -1,6 +1,9 @@
 import { supabase } from "./supabaseClient";
 
-interface Profile {
+/**
+ * Profile data structure for batch operations
+ */
+export interface Profile {
   id: string;
   username?: string;
   display_name?: string;
@@ -8,10 +11,20 @@ interface Profile {
 }
 
 /**
+ * Map of user IDs to profile data for efficient lookups
+ */
+export type ProfileMap = Record<string, Profile>;
+
+/**
  * Batch fetch profiles for multiple user IDs
  * Optimizes N+1 query problem by fetching all profiles in a single request
+ * @param userIds - Array of user IDs to fetch profiles for
+ * @returns Promise resolving to a map of user ID to profile data
+ * @example
+ * const profiles = await fetchBatchProfiles(['user1', 'user2']);
+ * console.log(profiles['user1']); // { id: 'user1', username: 'john', ... }
  */
-export async function fetchBatchProfiles(userIds: string[]): Promise<Record<string, Profile>> {
+export async function fetchBatchProfiles(userIds: string[]): Promise<ProfileMap> {
   if (!userIds.length) return {};
 
   try {
@@ -26,7 +39,7 @@ export async function fetchBatchProfiles(userIds: string[]): Promise<Record<stri
     }
 
     // Convert array to object keyed by user ID for easy lookup
-    const profileMap: Record<string, Profile> = {};
+    const profileMap: ProfileMap = {};
     profiles?.forEach(profile => {
       profileMap[profile.id] = profile;
     });
@@ -39,9 +52,37 @@ export async function fetchBatchProfiles(userIds: string[]): Promise<Record<stri
 }
 
 /**
- * Enhanced discussion fetcher that includes batch profile loading
+ * Discussion data structure with profile information
  */
-export async function fetchDiscussionsWithProfiles(discussionIds?: string[]) {
+export interface DiscussionWithProfile {
+  id: string;
+  title: string;
+  content: string;
+  user_id: string;
+  image_url?: string;
+  category: string;
+  created_at: string;
+  upvotes: number;
+  downvotes: number;
+  comment_count: number;
+  profiles: Profile;
+  _count: {
+    comments: number;
+    votes: {
+      up: number;
+      down: number;
+    };
+  };
+}
+
+/**
+ * Enhanced discussion fetcher that includes batch profile loading
+ * Fetches discussions and their associated user profiles in optimized batch operations
+ * @param discussionIds - Optional array of specific discussion IDs to fetch
+ * @returns Promise resolving to discussions with embedded profile data
+ * @throws Error if discussions cannot be fetched
+ */
+export async function fetchDiscussionsWithProfiles(discussionIds?: string[]): Promise<DiscussionWithProfile[]> {
   // First get discussions
   let query = supabase
     .from('discussions')
@@ -66,7 +107,7 @@ export async function fetchDiscussionsWithProfiles(discussionIds?: string[]) {
   // Combine discussions with their profiles
   return discussions.map(discussion => ({
     ...discussion,
-    profiles: profileMap[discussion.user_id] || { username: null, display_name: null, avatar_url: null },
+    profiles: profileMap[discussion.user_id] || { id: discussion.user_id, username: null, display_name: null, avatar_url: null },
     _count: {
       comments: discussion.comment_count || 0,
       votes: {

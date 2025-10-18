@@ -7,10 +7,19 @@ import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { UserPlus, UserCheck } from "lucide-react";
 
-interface FollowForumButtonProps {
+/**
+ * Props for the FollowForumButton component
+ */
+export interface FollowForumButtonProps {
+  /** Stock symbol for the forum to follow/unfollow */
   stockSymbol: string;
 }
 
+/**
+ * Button component for following/unfollowing trading forums
+ * Handles community membership operations with optimistic updates
+ * Uses indexed queries for optimal performance
+ */
 export default function FollowForumButton({ stockSymbol }: FollowForumButtonProps) {
   const { toast } = useToast();
   const queryClient = useQueryClient();

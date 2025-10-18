@@ -1,26 +1,25 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabaseClient";
 import { buildCursorQuery, addIndexedFilter } from "@/lib/pagination";
 import Sidebar from "@/components/Sidebar";
 import Navbar from "@/components/Navbar";
 
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
-import { DiscussionVotes } from "@/components/discussions/DiscussionVotes";
-import { Search, MessageSquare, Users, TrendingUp, Heart } from "lucide-react";
-import { formatDistanceToNow } from "date-fns";
+import { Search, MessageSquare, TrendingUp, Heart } from "lucide-react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { LazyImage } from "@/components/LazyImage";
 import { DiscussionListSkeleton } from "@/components/ui/skeleton-loading";
-import { ErrorBoundary } from "@/components/ErrorBoundary";
 
-interface Discussion {
+/**
+ * Discussion data structure with profile information
+ */
+export interface Discussion {
   id: string;
   title: string;
   content: string;
@@ -31,6 +30,7 @@ interface Discussion {
   views: number;
   comment_count: number;
   image_url?: string;
+  user_id: string;
   profiles: {
     username?: string;
     display_name?: string;
@@ -41,7 +41,11 @@ interface Discussion {
   };
 }
 
-interface ForumStats {
+/**
+ * Forum statistics data structure
+ */
+export interface ForumStats {
+  symbol: string;
   price: string;
   change: string;
   changeColor: string;
@@ -49,18 +53,44 @@ interface ForumStats {
   members: string;
 }
 
-interface UnifiedDashboardProps {
+/**
+ * Feed type options
+ */
+export type FeedType = 'for-you' | 'following';
+
+/**
+ * Forum type options
+ */
+export type ForumType = 'stocks' | 'crypto' | 'futures' | 'all';
+
+/**
+ * Props for the UnifiedDashboard component
+ */
+export interface UnifiedDashboardProps {
+  /** Main title for the dashboard */
   title: string;
+  /** Description text for the dashboard */
   description: string;
+  /** Badge text to display */
   badgeText: string;
-  forumType: 'stocks' | 'crypto' | 'futures' | 'all';
+  /** Type of forum being displayed */
+  forumType: ForumType;
+  /** List of available forums */
   forumList: string[];
+  /** Top symbols to display in sidebar (default: tech stocks) */
   topSymbols?: string[];
+  /** Symbols to preload data for */
   preloadSymbols?: string[];
+  /** Function to filter discussions by category */
   categoryFilter: (category: string) => boolean;
+  /** Function to get router path for a category */
   getRouterPath: (category: string) => string;
 }
 
+/**
+ * Unified dashboard component for displaying forum discussions and community stats
+ * Features feed filtering, community stats sidebar, and responsive design
+ */
 export function UnifiedDashboard({
   title,
   description,
@@ -73,31 +103,29 @@ export function UnifiedDashboard({
   getRouterPath
 }: UnifiedDashboardProps) {
   const router = useRouter();
-  const [feedType, setFeedType] = useState<'for-you' | 'following'>('for-you');
+  const [feedType, setFeedType] = useState<FeedType>('for-you');
 
-
-
-  // Fetch top community stats based on weighted score
+  /**
+   * Fetches top community statistics with fallback mechanism
+   * Uses new API endpoint with fallback to individual forum stats
+   */
   const { data: topCommunitiesData, isLoading: topCommunitiesLoading } = useQuery({
     queryKey: ["top-communities", forumType],
-    queryFn: async () => {
+    queryFn: async (): Promise<ForumStats[]> => {
       try {
         const response = await fetch(`/api/top-communities?forumType=${forumType}&limit=5`);
         if (!response.ok) throw new Error('Failed to fetch top communities');
-        const data = await response.json();
-        return data;
+        return await response.json();
       } catch (error) {
-        console.error('Error fetching top communities:', error);
         // Fallback to old method if new API fails
         const results = await Promise.all(
-          topSymbols.map(async (symbol) => {
+          topSymbols.map(async (symbol): Promise<ForumStats> => {
             try {
               const response = await fetch(`/api/forum-stats?symbol=${symbol}`);
               if (!response.ok) throw new Error(`Failed to fetch ${symbol} stats`);
-              const data: ForumStats = await response.json();
+              const data = await response.json();
               return { symbol, ...data };
-            } catch (error) {
-              console.error(`Error fetching stats for ${symbol}:`, error);
+            } catch {
               return {
                 symbol,
                 price: "Loading...",
@@ -112,105 +140,107 @@ export function UnifiedDashboard({
         return results;
       }
     },
-    refetchInterval: 60000
+    refetchInterval: 60000 // Refresh every minute
   });
 
+  /**
+   * Fetches discussions with profile data based on feed type
+   * Handles both "for-you" and "following" feed types with optimized queries
+   */
   const { data: discussions, isLoading, error } = useQuery({
     queryKey: ["discussions", "dashboard", feedType, forumType],
-    queryFn: async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-
-      if (feedType === 'following' && user) {
-        // Use indexed filter for community memberships
-        let membershipQuery = supabase
-          .from("community_memberships")
-          .select("community_symbol");
-
-        membershipQuery = addIndexedFilter(membershipQuery, 'community_memberships', { user_id: user.id });
-
-        const { data: followingData, error: followError } = await membershipQuery;
-
-        if (followError) return [];
-
-        const followedForums = followingData?.map(f => f.community_symbol.toLowerCase()) || [];
-        if (followedForums.length === 0) return [];
-
-        // Use indexed filter for discussions in followed forums
-        let discussionsQuery = supabase
-          .from("discussions")
-          .select("id, title, content, category, created_at, upvotes, downvotes, views, comment_count, user_id, image_url");
-
-        discussionsQuery = addIndexedFilter(discussionsQuery, 'discussions', { category: followedForums });
-
-        // Apply cursor-based pagination
-        discussionsQuery = buildCursorQuery(discussionsQuery, { limit: 20 });
-
-        const { data, error } = await discussionsQuery;
-
-        if (error) throw error;
-
-        const filteredDiscussions = data.filter(d => categoryFilter(d.category?.toUpperCase() || ''));
-        if (filteredDiscussions.length === 0) return [];
-
-        const discussionsWithProfiles = await Promise.all(
-          filteredDiscussions.map(async (discussion) => {
-            // Use indexed filter for profile lookup
-            let profileQuery = supabase
-              .from("profiles")
-              .select("username, display_name, avatar_url");
-
-            profileQuery = addIndexedFilter(profileQuery, 'profiles', { user_id: discussion.user_id });
-
-            const { data: profile } = await profileQuery.single();
-
-            return {
-              ...discussion,
-              profiles: profile || { username: null, display_name: null, avatar_url: null },
-              _count: { comments: discussion.comment_count || 0 }
-            };
-          })
-        );
-
-        return discussionsWithProfiles as Discussion[];
+    queryFn: async (): Promise<Discussion[]> => {
+      if (feedType === 'following') {
+        return await fetchFollowingDiscussions();
       } else {
-        // Use cursor-based pagination for main feed
-        let discussionsQuery = supabase
-          .from("discussions")
-          .select("id, title, content, category, created_at, upvotes, downvotes, views, comment_count, user_id, image_url");
-
-        // Apply cursor-based pagination
-        discussionsQuery = buildCursorQuery(discussionsQuery, { limit: 20 });
-
-        const { data, error } = await discussionsQuery;
-
-        if (error) throw error;
-
-        const filteredDiscussions = data.filter(d => categoryFilter(d.category?.toUpperCase() || ''));
-        if (filteredDiscussions.length === 0) return [];
-
-        const discussionsWithProfiles = await Promise.all(
-          filteredDiscussions.map(async (discussion) => {
-            // Use indexed filter for profile lookup
-            let profileQuery = supabase
-              .from("profiles")
-              .select("username, display_name, avatar_url");
-
-            profileQuery = addIndexedFilter(profileQuery, 'profiles', { user_id: discussion.user_id });
-
-            const { data: profile } = await profileQuery.single();
-
-            return {
-              ...discussion,
-              profiles: profile || { username: null, display_name: null, avatar_url: null },
-              _count: { comments: discussion.comment_count || 0 }
-            };
-          })
-        );
-
-        return discussionsWithProfiles as Discussion[];
+        return await fetchForYouDiscussions();
       }
     }
   });
+
+  /**
+   * Fetches discussions from followed communities
+   */
+  const fetchFollowingDiscussions = async (): Promise<Discussion[]> => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return [];
+
+    // Get followed communities using indexed query
+    let membershipQuery = supabase
+      .from("community_memberships")
+      .select("community_symbol");
+
+    membershipQuery = addIndexedFilter(membershipQuery, 'community_memberships', { user_id: user.id });
+
+    const { data: followingData, error: followError } = await membershipQuery;
+
+    if (followError || !followingData?.length) return [];
+
+    const followedForums = followingData.map(f => f.community_symbol.toLowerCase());
+
+    // Fetch discussions from followed forums
+    let discussionsQuery = supabase
+      .from("discussions")
+      .select("id, title, content, category, created_at, upvotes, downvotes, views, comment_count, user_id, image_url");
+
+    discussionsQuery = addIndexedFilter(discussionsQuery, 'discussions', { category: followedForums });
+    discussionsQuery = buildCursorQuery(discussionsQuery, { limit: 20 });
+
+    const { data, error } = await discussionsQuery;
+    if (error) throw error;
+
+    const filteredDiscussions = data?.filter(d => categoryFilter(d.category?.toUpperCase() || '')) || [];
+    if (filteredDiscussions.length === 0) return [];
+
+    return await enrichDiscussionsWithProfiles(filteredDiscussions);
+  };
+
+  /**
+   * Fetches discussions for the main "for you" feed
+   */
+  const fetchForYouDiscussions = async (): Promise<Discussion[]> => {
+    let discussionsQuery = supabase
+      .from("discussions")
+      .select("id, title, content, category, created_at, upvotes, downvotes, views, comment_count, user_id, image_url");
+
+    discussionsQuery = buildCursorQuery(discussionsQuery, { limit: 20 });
+
+    const { data, error } = await discussionsQuery;
+    if (error) throw error;
+
+    const filteredDiscussions = data?.filter(d => categoryFilter(d.category?.toUpperCase() || '')) || [];
+    if (filteredDiscussions.length === 0) return [];
+
+    return await enrichDiscussionsWithProfiles(filteredDiscussions);
+  };
+
+  /**
+   * Enriches discussions with user profile data using batch optimization
+   * @param discussions - Array of discussions to enrich
+   * @returns Discussions with profile data attached
+   */
+  const enrichDiscussionsWithProfiles = async (discussions: any[]): Promise<Discussion[]> => {
+    const discussionsWithProfiles = await Promise.all(
+      discussions.map(async (discussion) => {
+        // Use indexed filter for profile lookup
+        let profileQuery = supabase
+          .from("profiles")
+          .select("username, display_name, avatar_url");
+
+        profileQuery = addIndexedFilter(profileQuery, 'profiles', { user_id: discussion.user_id });
+
+        const { data: profile } = await profileQuery.single();
+
+        return {
+          ...discussion,
+          profiles: profile || { username: null, display_name: null, avatar_url: null },
+          _count: { comments: discussion.comment_count || 0 }
+        };
+      })
+    );
+
+    return discussionsWithProfiles as Discussion[];
+  };
 
   const filteredDiscussions = discussions || [];
 

@@ -13,12 +13,17 @@ import { formatDistanceToNow } from "date-fns";
 import { useProfile } from "@/hooks/useProfile";
 import { useRouter } from "next/navigation";
 
-interface Comment {
+/**
+ * Comment data structure with profile and vote information
+ */
+export interface Comment {
   id: string;
   content: string;
   user_id: string;
   discussion_id: string;
   created_at: string;
+  upvotes: number;
+  downvotes: number;
   profiles: {
     username?: string;
     display_name?: string;
@@ -32,11 +37,20 @@ interface Comment {
   };
 }
 
-interface DiscussionCommentsProps {
+/**
+ * Props for the DiscussionComments component
+ */
+export interface DiscussionCommentsProps {
+  /** ID of the discussion to show comments for */
   discussionId: string;
+  /** Callback when comment count changes */
   onCommentCountChange?: () => void;
 }
 
+/**
+ * Component for displaying and managing discussion comments
+ * Handles comment fetching, posting, and voting interactions
+ */
 export function DiscussionComments({ discussionId, onCommentCountChange }: DiscussionCommentsProps) {
   const queryClient = useQueryClient();
   const [newComment, setNewComment] = useState("");
@@ -52,89 +66,100 @@ export function DiscussionComments({ discussionId, onCommentCountChange }: Discu
     getUser();
   }, []);
 
+  /**
+   * Fetches comments for the discussion with profile data
+   */
   const { data: comments, isLoading, error, refetch } = useQuery({
     queryKey: ["comments", discussionId],
-    queryFn: async () => {
-      // Use indexed filter for comments (post_id equivalent to discussion_id)
-      let query = supabase
-        .from("comments")
-        .select("id, content, user_id, discussion_id, created_at, upvotes, downvotes");
-
-      // Apply indexed filter for discussion_id (post_id equivalent)
-      query = addIndexedFilter(query, 'comments', { post_id: discussionId });
-
-      // Apply cursor-based pagination with ascending order for comments
-      query = buildCursorQuery(query, { limit: 50, orderColumn: 'created_at' });
-
-      const { data: commentsData, error: commentsError } = await query;
-
-      if (commentsError) throw commentsError;
-
-      // Then get profiles separately with indexed filters
-      const commentsWithProfiles = await Promise.all(
-        commentsData.map(async (comment) => {
-          // Use indexed filter for profile lookup
-          let profileQuery = supabase
-            .from("profiles")
-            .select("username, display_name, avatar_url");
-
-          profileQuery = addIndexedFilter(profileQuery, 'profiles', { user_id: comment.user_id });
-
-          const { data: profile } = await profileQuery.single();
-
-          return {
-            ...comment,
-            profiles: profile || { username: null, display_name: null, avatar_url: null }
-          };
-        })
-      );
-
-      const finalCommentsData = commentsWithProfiles;
-
-      // Transform data to match our interface
-      return finalCommentsData.map((comment: { id: string; [key: string]: unknown }) => ({
-        ...comment,
-        _count: {
-          votes: {
-            up: comment.upvotes || 0,
-            down: comment.downvotes || 0
-          }
-        }
-      })) as Comment[];
+    queryFn: async (): Promise<Comment[]> => {
+      return await fetchCommentsWithProfiles(discussionId);
     }
   });
 
+  /**
+   * Posts a new comment to the discussion
+   */
   const postComment = async () => {
-    if (!newComment.trim()) return;
+    if (!newComment.trim() || !currentUser) return;
 
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
-
-    const { error } = await supabase
-      .from("comments")
-      .insert({
-        content: newComment.trim(),
-        discussion_id: discussionId,
-        user_id: user.id
-      });
-
-    if (error) {
-      console.error("Error posting comment:", error);
-      return;
-    }
-
-    // Use RPC function to increment comment count
     try {
-      await supabase.rpc('increment_comment_count', {
-        p_discussion_id: discussionId
-      });
-    } catch (rpcError) {
-      console.error("Error incrementing comment count:", rpcError);
-    }
+      const { error } = await supabase
+        .from("comments")
+        .insert({
+          content: newComment.trim(),
+          discussion_id: discussionId,
+          user_id: currentUser
+        });
 
-    setNewComment("");
-    refetch();
-    onCommentCountChange?.();
+      if (error) throw error;
+
+      // Use RPC function to increment comment count
+      try {
+        await supabase.rpc('increment_comment_count', {
+          p_discussion_id: discussionId
+        });
+      } catch (rpcError) {
+        console.error("Error incrementing comment count:", rpcError);
+      }
+
+      setNewComment("");
+      refetch();
+      onCommentCountChange?.();
+    } catch (error) {
+      console.error("Error posting comment:", error);
+    }
+  };
+
+  /**
+   * Fetches comments with associated profile data using optimized queries
+   * @param discussionId - ID of the discussion to fetch comments for
+   * @returns Promise resolving to comments with profile data
+   */
+  const fetchCommentsWithProfiles = async (discussionId: string): Promise<Comment[]> => {
+    // Use indexed filter for comments (post_id equivalent to discussion_id)
+    let query = supabase
+      .from("comments")
+      .select("id, content, user_id, discussion_id, created_at, upvotes, downvotes");
+
+    // Apply indexed filter for discussion_id (post_id equivalent)
+    query = addIndexedFilter(query, 'comments', { post_id: discussionId });
+
+    // Apply cursor-based pagination with ascending order for comments
+    query = buildCursorQuery(query, { limit: 50, orderColumn: 'created_at' });
+
+    const { data: commentsData, error: commentsError } = await query;
+
+    if (commentsError) throw commentsError;
+
+    // Enrich comments with profile data using indexed queries
+    const commentsWithProfiles = await Promise.all(
+      commentsData.map(async (comment) => {
+        // Use indexed filter for profile lookup
+        let profileQuery = supabase
+          .from("profiles")
+          .select("username, display_name, avatar_url");
+
+        profileQuery = addIndexedFilter(profileQuery, 'profiles', { user_id: comment.user_id });
+
+        const { data: profile } = await profileQuery.single();
+
+        return {
+          ...comment,
+          profiles: profile || { username: null, display_name: null, avatar_url: null }
+        };
+      })
+    );
+
+    // Transform data to match our interface
+    return commentsWithProfiles.map((comment) => ({
+      ...comment,
+      _count: {
+        votes: {
+          up: comment.upvotes || 0,
+          down: comment.downvotes || 0
+        }
+      }
+    })) as Comment[];
   };
 
   if (isLoading) {

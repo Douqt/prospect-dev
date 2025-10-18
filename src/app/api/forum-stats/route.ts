@@ -1,37 +1,51 @@
 import { createServerClient } from '@/lib/supabase-server';
 import { createClient } from '@supabase/supabase-js';
 import { NextResponse } from 'next/server';
-import { buildCursorQuery, addIndexedFilter } from '@/lib/pagination';
+import { addIndexedFilter } from '@/lib/pagination';
 
-// Server-side API for forum statistics
+/**
+ * Forum statistics response structure
+ */
+export interface ForumStatsResponse {
+  posts: number;
+  members: string;
+}
+
+/**
+ * GET handler for forum statistics API
+ * Returns member count and post count for a specific trading symbol
+ * Uses cached data when available, falls back to dynamic calculation
+ */
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const symbol = searchParams.get('symbol');
 
-  if (!symbol) {
-    return NextResponse.json({ error: 'Symbol required' }, { status: 400 });
+  // Validate required parameters
+  if (!symbol?.trim()) {
+    return NextResponse.json({
+      error: 'Symbol parameter is required'
+    }, { status: 400 });
   }
 
   try {
     const supabase = await createServerClient();
+    const upperSymbol = symbol.toUpperCase();
 
-    // Get forum stats from community_stats table
+    // Try to get cached stats first
     const { data: communityStats, error: statsError } = await supabase
       .from('community_stats')
       .select('member_count, post_count')
-      .eq('community_symbol', symbol.toUpperCase())
+      .eq('community_symbol', upperSymbol)
       .single();
 
-    if (statsError) {
+    if (statsError && statsError.code !== 'PGRST116') {
       console.error('Error fetching community stats:', statsError);
-      // If table doesn't exist or no data, calculate counts dynamically
-      console.log('Falling back to dynamic calculation for:', symbol.toUpperCase());
     }
 
     let membersCount = communityStats?.member_count || 0;
     let postsCount = communityStats?.post_count || 0;
 
-    // If no data in community_stats, calculate dynamically
+    // If no cached data, calculate dynamically
     if (!communityStats || (membersCount === 0 && postsCount === 0)) {
       try {
         // Count posts from discussions table with indexed filter

@@ -112,7 +112,7 @@ export default function AboutPage() {
             <div className="flex justify-center gap-12 pt-6">
               {[
                 { label: 'Active Traders', value: stats.activeTraders.toLocaleString(), prefix: '' },
-                { label: 'Daily Trades', value: stats.dailyTrades.toLocaleString(), prefix: '' },
+                { label: 'Discussions', value: stats.dailyTrades.toLocaleString(), prefix: '' },
                 { label: 'Success Rate', value: stats.successRate.toFixed(1), suffix: '%' }
               ].map((stat, index) => (
                 <div key={index} className="text-center">

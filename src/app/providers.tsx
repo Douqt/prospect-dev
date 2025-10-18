@@ -10,15 +10,35 @@ import { ThemeProvider } from "@/components/ui/theme-provider";
 import { supabase } from "@/lib/supabaseClient";
 import { userHasProfile } from "@/lib/profile";
 
-type Theme = 'light' | 'dark';
+/**
+ * Theme preference type
+ */
+export type Theme = 'light' | 'dark';
 
-interface ProvidersProps {
+/**
+ * Props for the Providers component
+ */
+export interface ProvidersProps {
+  /** Child components to render */
   children: React.ReactNode;
+  /** Initial theme from server-side rendering */
   initialTheme?: Theme | null;
 }
 
+/**
+ * Root providers component that wraps the entire application
+ * Provides React Query, theme, tooltips, and authentication state management
+ * Includes client-side onboarding validation as a fallback to middleware
+ */
 export default function Providers({ children, initialTheme }: ProvidersProps) {
-  const [queryClient] = useState(() => new QueryClient());
+  const [queryClient] = useState(() => new QueryClient({
+    defaultOptions: {
+      queries: {
+        staleTime: 5 * 60 * 1000, // 5 minutes
+        gcTime: 10 * 60 * 1000, // 10 minutes (formerly cacheTime)
+      },
+    },
+  }));
   const router = useRouter();
   const pathname = usePathname();
 
@@ -29,33 +49,30 @@ export default function Providers({ children, initialTheme }: ProvidersProps) {
     const isOnAuthRoute = authRoutes.some(route => pathname.startsWith(route));
 
     if (isOnAuthRoute) {
-      // No check needed on auth routes
-      return;
+      return; // No check needed on auth routes
     }
 
-    // Always check (both dev and prod) - middleware might fail sometimes
+    /**
+     * Validates user authentication and profile completion
+     * Redirects to onboarding if profile is missing
+     */
     const checkOnboarding = async () => {
       try {
         const { data: { user }, error: authError } = await supabase.auth.getUser();
 
-        if (!user) {
-          // Not authenticated, continue normally
-          return;
+        if (authError || !user) {
+          return; // Not authenticated, continue normally
         }
 
         // User is authenticated, check if they have a profile
         const hasProfile = await userHasProfile(user.id);
 
         if (!hasProfile) {
-          console.log('🚨 Client-side fallback: Redirecting to onboarding (no profile found)');
           router.push('/auth/onboarding');
           return;
         }
-
-        // User has profile, continue normally
-        console.log('✅ Client-side fallback: Profile check passed');
       } catch (error) {
-        console.error('Client-side onboarding check error:', error);
+        // Silently handle errors - this is a fallback check
       }
     };
 

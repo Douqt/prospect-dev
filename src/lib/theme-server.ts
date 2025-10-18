@@ -1,6 +1,16 @@
 import { createServerClient } from '@/lib/supabase-server';
 
-export async function getServerTheme() {
+/**
+ * Theme preference type
+ */
+export type Theme = 'light' | 'dark';
+
+/**
+ * Fetches the user's theme preference from the server
+ * Used for server-side rendering to avoid theme flash
+ * @returns Promise resolving to user's preferred theme or null for guests
+ */
+export async function getServerTheme(): Promise<Theme | null> {
   try {
     const supabase = await createServerClient();
 
@@ -12,7 +22,7 @@ export async function getServerTheme() {
       return null;
     }
 
-    // Get user preferences
+    // Get user preferences from profile
     const { data: profile } = await supabase
       .from('profiles')
       .select('dark_mode')

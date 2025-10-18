@@ -1,24 +1,48 @@
 import { createServerClient } from '@/lib/supabase-server';
 import { NextResponse } from 'next/server';
-import { addIndexedFilter } from '@/lib/pagination';
 
-// API endpoint to get top communities based on weighted score
+/**
+ * Forum type for filtering communities
+ */
+export type ForumType = 'all' | 'stocks' | 'crypto' | 'futures';
+
+/**
+ * Community statistics data structure
+ */
+export interface CommunityStats {
+  community_symbol: string;
+  member_count: number;
+  post_count: number;
+  last_activity: string;
+  score: number;
+  members: number;
+  posts: number;
+}
+
+/**
+ * GET handler for top communities API
+ * Returns communities ranked by weighted score (60% members + 40% posts)
+ * Supports filtering by forum type (stocks, crypto, futures)
+ */
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
-  const forumType = searchParams.get('forumType') || 'all';
-  const limit = parseInt(searchParams.get('limit') || '5');
+  const forumType = (searchParams.get('forumType') || 'all') as ForumType;
+  const limit = Math.min(parseInt(searchParams.get('limit') || '5'), 20); // Max 20
 
   try {
     const supabase = await createServerClient();
 
-    // Get all communities with their stats
+    // Fetch all community statistics
     const { data: communities, error } = await supabase
       .from('community_stats')
       .select('community_symbol, member_count, post_count, last_activity');
 
     if (error) {
       console.error('Error fetching community stats:', error);
-      return NextResponse.json({ error: 'Failed to fetch communities' }, { status: 500 });
+      return NextResponse.json({
+        error: 'Failed to fetch communities',
+        details: error.message
+      }, { status: 500 });
     }
 
     if (!communities || communities.length === 0) {
