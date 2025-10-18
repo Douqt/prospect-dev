@@ -48,6 +48,10 @@ export function isFuturesForum(category: string): boolean {
   return FUTURES_FORUMS.includes(category.toUpperCase()) || category === 'futures';
 }
 
+export function isAllForum(category: string): boolean {
+  return ALL_VALID_FORUMS.includes(category.toUpperCase()) || category === 'all';
+}
+
 export function isGeneralForum(category: string): boolean {
   return GENERAL_FORUMS.includes(category.toUpperCase());
 }

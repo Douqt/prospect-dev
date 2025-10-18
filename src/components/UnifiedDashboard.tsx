@@ -164,16 +164,19 @@ export function UnifiedDashboard({
   const fetchFollowingDiscussions = async (): Promise<Discussion[]> => {
     try {
       const response = await fetch('/api/followed-discussions?limit=20');
+
       if (!response.ok) throw new Error('Failed to fetch followed discussions');
 
       const data = await response.json();
 
       // Filter by forum type if needed
       const filteredDiscussions = data.discussions?.filter((d: any) =>
-        categoryFilter(d.category?.toUpperCase() || '')
+        categoryFilter(d.category?.toLowerCase() || '')
       ) || [];
 
       if (filteredDiscussions.length === 0) return [];
+
+      
 
       return filteredDiscussions;
     } catch (error) {

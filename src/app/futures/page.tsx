@@ -1,5 +1,5 @@
 "use client";
-import { FUTURES_FORUMS } from "../../../forum-categories";
+import { FUTURES_FORUMS, isFuturesForum } from "../../../forum-categories";
 import { UnifiedDashboard } from "@/components/UnifiedDashboard";
 
 export default function FuturesPage() {
@@ -10,7 +10,7 @@ export default function FuturesPage() {
       badgeText="All Forums"
       forumType="futures"
       forumList={FUTURES_FORUMS}
-      categoryFilter={(category: string) => FUTURES_FORUMS.includes(category)}
+      categoryFilter={(category: string) => isFuturesForum(category)}
       getRouterPath={(category: string) => '/futures'}
     />
   );

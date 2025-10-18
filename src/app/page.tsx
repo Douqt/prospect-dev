@@ -1,6 +1,6 @@
 "use client";
 
-import { ALL_VALID_FORUMS } from "../../forum-categories";
+import { ALL_VALID_FORUMS, isAllForum, isCryptoForum, isFuturesForum, isStockForum } from "../../forum-categories";
 import { UnifiedDashboard } from "@/components/UnifiedDashboard";
 
 /**
@@ -16,18 +16,13 @@ export default function HomePage() {
       badgeText="All Forums"
       forumType="all"
       forumList={ALL_VALID_FORUMS}
-      categoryFilter={(category: string) => ALL_VALID_FORUMS.includes(category)}
+      categoryFilter={(category: string) => isAllForum(category)}
       getRouterPath={(category: string) => {
         // Route main categories to their respective sections
-        if (category === 'STOCKS' || category === 'CRYPTO' || category === 'FUTURES') {
-          return '/'; // Main feed
-        }
-        // Route crypto symbols to crypto section
-        if (category.toLowerCase().includes('btc') || category.toLowerCase().includes('eth')) {
-          return '/crypto';
-        }
-        // Default to stocks section for other symbols
-        return '/stocks';
+        if(isStockForum(category)) return '/stocks';
+        if(isCryptoForum(category)) return '/crypto';
+        if(isFuturesForum(category)) return '/futures';
+        return '/';
       }}
     />
   );

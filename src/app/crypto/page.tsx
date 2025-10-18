@@ -1,5 +1,5 @@
 "use client";
-import { CRYPTO_FORUMS } from "../../../forum-categories";
+import { CRYPTO_FORUMS, isCryptoForum } from "../../../forum-categories";
 import { UnifiedDashboard } from "@/components/UnifiedDashboard";
 
 export default function CryptoPage() {
@@ -10,7 +10,7 @@ export default function CryptoPage() {
       badgeText="All Forums"
       forumType="crypto"
       forumList={CRYPTO_FORUMS}
-      categoryFilter={(category: string) => CRYPTO_FORUMS.includes(category)}
+      categoryFilter={(category: string) => isCryptoForum(category)}
       getRouterPath={(category: string) => '/crypto'}
     />
   );

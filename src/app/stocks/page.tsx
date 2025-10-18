@@ -1,5 +1,5 @@
 "use client";
-import { STOCK_FORUMS } from "../../../forum-categories";
+import { isStockForum, STOCK_FORUMS } from "../../../forum-categories";
 import { UnifiedDashboard } from "@/components/UnifiedDashboard";
 
 export default function StocksPage() {
@@ -10,7 +10,7 @@ export default function StocksPage() {
       badgeText="All Forums"
       forumType="stocks"
       forumList={STOCK_FORUMS}
-      categoryFilter={(category: string) => STOCK_FORUMS.includes(category)}
+      categoryFilter={(category: string) => isStockForum(category)}
       getRouterPath={(category: string) => '/stocks'}
     />
   );

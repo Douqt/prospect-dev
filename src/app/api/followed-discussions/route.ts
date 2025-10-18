@@ -59,6 +59,8 @@ export async function GET(request: Request) {
       pagination: { limit: 100 } // Get up to 100 communities
     });
 
+    
+
     if (!communitiesResult.data || communitiesResult.data.length === 0) {
       return NextResponse.json({
         discussions: [],
@@ -83,13 +85,17 @@ export async function GET(request: Request) {
             image_url,
             category,
             created_at,
+            upvotes,
+            downvotes,
+            comment_count,
+            views,
             profiles:user_id (
               username,
               display_name,
               avatar_url
             )
           `)
-          .eq('category', symbol)
+          .eq('category', symbol.toLowerCase())
           .order('created_at', { ascending: false })
           .limit(Math.ceil(limit / communitySymbols.length) + 5); // Distribute limit across communities
 
@@ -106,6 +112,7 @@ export async function GET(request: Request) {
     });
 
     const discussionsArrays = await Promise.all(discussionsPromises);
+    
 
     // Combine all discussions and sort by creation date
     const allDiscussions = discussionsArrays.flat();
@@ -129,42 +136,16 @@ export async function GET(request: Request) {
     const paginatedDiscussions = filteredDiscussions.slice(0, limit);
 
     // Enrich discussions with engagement counts
-    const discussionsWithCounts = await Promise.all(
-      paginatedDiscussions.map(async (discussion) => {
-        try {
-          const [commentsResult, votesResult] = await Promise.all([
-            supabase.from('comments').select('*', { count: 'exact', head: true })
-              .eq('discussion_id', discussion.id),
-            supabase.from('discussion_votes').select('vote_type', { count: 'exact' })
-              .eq('discussion_id', discussion.id)
-          ]);
-
-          // Count votes by type
-          const votes = { up: 0, down: 0 };
-          if (votesResult.count) {
-            votes.up = Math.floor((votesResult.count || 0) / 2);
-            votes.down = Math.floor((votesResult.count || 0) / 2);
-          }
-
-          return {
-            ...discussion,
-            _count: {
-              comments: commentsResult.count || 0,
-              votes
-            }
-          };
-        } catch (enrichError) {
-          console.error(`Error enriching discussion ${discussion.id}:`, enrichError);
-          return {
-            ...discussion,
-            _count: {
-              comments: 0,
-              votes: { up: 0, down: 0 }
-            }
-          };
-        }
-      })
-    );
+    const discussionsWithCounts = paginatedDiscussions.map((discussion) => ({
+      ...discussion,
+      _count: {
+        comments: discussion.comment_count || 0,
+        votes: {
+          up: discussion.upvotes || 0,
+          down: discussion.downvotes || 0,
+        },
+      },
+    }));
 
     // Determine next/prev cursors
     const nextCursor = hasMore && discussionsWithCounts.length > 0

@@ -235,7 +235,7 @@ export async function getUserCommunities(
     .from('community_memberships')
     .select(`
       community_symbol,
-      followed_at,
+      created_at,
       community_stats!inner (
         member_count,
         post_count,
@@ -244,17 +244,17 @@ export async function getUserCommunities(
     `)
     .eq('user_id', userId);
 
-  // Apply cursor pagination using followed_at timestamp
+  // Apply cursor pagination using created_at timestamp
   if (cursor) {
     if (direction === 'next') {
-      query = query.lt('followed_at', cursor);
+      query = query.lt('created_at', cursor);
     } else {
-      query = query.gt('followed_at', cursor);
+      query = query.gt('created_at', cursor);
     }
   }
 
   query = query
-    .order('followed_at', { ascending: false })
+    .order('created_at', { ascending: false })
     .limit(limit + 1); // Fetch one extra to check if there are more
 
   const { data, error } = await query;
@@ -269,8 +269,8 @@ export async function getUserCommunities(
 
   return {
     data: communities || [],
-    nextCursor: hasMore && communities.length > 0 ? communities[communities.length - 1].followed_at : null,
-    prevCursor: communities.length > 0 ? communities[0].followed_at : null,
+    nextCursor: hasMore && communities.length > 0 ? communities[communities.length - 1].created_at : null,
+    prevCursor: communities.length > 0 ? communities[0].created_at : null,
     hasMore
   };
 }
@@ -301,7 +301,7 @@ export async function getCommunityUsers(
     .from('community_memberships')
     .select(`
       user_id,
-      followed_at,
+      created_at,
       profiles!inner (
         username,
         display_name,
@@ -310,17 +310,17 @@ export async function getCommunityUsers(
     `)
     .eq('community_symbol', communitySymbol.toLowerCase());
 
-  // Apply cursor pagination using followed_at timestamp
+  // Apply cursor pagination using created_at timestamp
   if (cursor) {
     if (direction === 'next') {
-      query = query.lt('followed_at', cursor);
+      query = query.lt('created_at', cursor);
     } else {
-      query = query.gt('followed_at', cursor);
+      query = query.gt('created_at', cursor);
     }
   }
 
   query = query
-    .order('followed_at', { ascending: false })
+    .order('created_at', { ascending: false })
     .limit(limit + 1); // Fetch one extra to check if there are more
 
   const { data, error } = await query;
@@ -335,8 +335,8 @@ export async function getCommunityUsers(
 
   return {
     data: users || [],
-    nextCursor: hasMore && users.length > 0 ? users[users.length - 1].followed_at : null,
-    prevCursor: users.length > 0 ? users[0].followed_at : null,
+    nextCursor: hasMore && users.length > 0 ? users[users.length - 1].created_at : null,
+    prevCursor: users.length > 0 ? users[0].created_at : null,
     hasMore
   };
 }
