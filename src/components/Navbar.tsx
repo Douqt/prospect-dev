@@ -1,6 +1,6 @@
 "use client";
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback} from "react";
 import { supabase } from "../lib/supabaseClient";
 import { timeAgo } from "../lib/time";
 import { useTheme } from "@/hooks/useTheme";
@@ -611,14 +611,14 @@ export default function NavBar() {
   };
 
   // Load more results for infinite scroll
-  const loadMoreResults = () => {
+  const loadMoreResults = useCallback(() => {
     if (hasMoreResults && !isLoadingMore && searchQuery.trim()) {
       console.log('🔄 Loading more results, current page:', searchPage);
       setIsLoadingMore(true);
       const nextPage = searchPage + 1;
       performSearch(searchQuery, nextPage, true);
     }
-  };
+  }, [hasMoreResults, isLoadingMore, searchQuery, searchPage, performSearch]);
 
   // Debounced search
   useEffect(() => {

@@ -386,7 +386,7 @@ export default function SearchPage() {
     } finally {
       setIsSearching(false);
     }
-  }, [activeFilter]);
+  }, []);
 
   // Filter results based on active filter
   const getFilteredResults = () => {

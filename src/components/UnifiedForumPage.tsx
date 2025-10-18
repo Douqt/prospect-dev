@@ -309,7 +309,7 @@ export function UnifiedForumPage({
       if (!resolvedParams?.symbol) return [];
 
       // Get recent discussions for this forum with profile data
-      let query = supabase
+      const query = supabase
         .from("discussions")
         .select(`
           id,
