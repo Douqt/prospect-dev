@@ -9,6 +9,8 @@ import { CRYPTO_FORUMS } from "@/lib/cryptoForums";
 import Sidebar from "@/components/Sidebar";
 import Navbar from "@/components/Navbar";
 
+export const dynamic = 'force-dynamic';
+
 interface SearchResult {
   type: string;
   id: string;
