@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { supabase } from "../../lib/supabaseClient";
 import Link from "next/link";
@@ -28,7 +28,8 @@ interface SearchResult {
 
 type SearchFilter = 'all' | 'posts' | 'communities' | 'comments';
 
-export default function SearchPage() {
+// Component that uses useSearchParams - needs to be wrapped in Suspense
+function SearchPageContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const initialQuery = searchParams.get('query') || '';
@@ -664,5 +665,20 @@ export default function SearchPage() {
         </div>
       </main>
     </div>
+  );
+}
+
+// Main component that wraps SearchPageContent in Suspense
+export default function SearchPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-background relative text-foreground">
+        <div className="flex items-center justify-center min-h-screen">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#e0a815]"></div>
+        </div>
+      </div>
+    }>
+      <SearchPageContent />
+    </Suspense>
   );
 }
