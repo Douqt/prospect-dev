@@ -166,9 +166,13 @@ function SearchPageContent() {
           }));
 
         // Futures Forums
-        const scoredFuturesForums = FUTURES_FORUMS
+        const scoredFuturesForums = Object.keys(FUTURES_FORUMS)
           .map(forum => {
-            const relevance = calculateRelevance(forum, query);
+            const futuresName = FUTURES_FORUMS[forum];
+            const symbolScore = calculateRelevance(forum, query);
+            const nameScore = calculateRelevance(futuresName, query);
+            const relevance = Math.max(symbolScore, nameScore);
+
             return {
               forum,
               relevance,

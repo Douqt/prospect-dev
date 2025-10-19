@@ -328,9 +328,13 @@ export default function NavBar() {
         .sort((a, b) => b.relevance - a.relevance) // Sort by relevance (highest first)
         .slice(0, Math.min(15, resultsPerPage));
 
-      const scoredFuturesForums = FUTURES_FORUMS
+      const scoredFuturesForums = Object.keys(FUTURES_FORUMS)
         .map(forum => {
-          const relevance = calculateRelevance(forum, query);
+          const futuresName = FUTURES_FORUMS[forum];
+          const symbolScore = calculateRelevance(forum, query);
+          const nameScore = calculateRelevance(futuresName, query);
+          const relevance = Math.max(symbolScore, nameScore);
+          
           return {
             forum,
             relevance,

@@ -2,17 +2,12 @@
 // This ensures posts only appear in the correct section
 import { STOCK_FORUMS as STOCK_FORUMS_DATA } from '@/lib/stockForums';
 import { CRYPTO_FORUMS as CRYPTO_FORUMS_DATA } from '@/lib/cryptoForums';
+import { FUTURES_FORUMS as FUTURES_FORUMS_DATA } from '@/lib/futuresForums';
 
 export const STOCK_FORUMS = STOCK_FORUMS_DATA;
 export const CRYPTO_FORUMS = CRYPTO_FORUMS_DATA;
 
-export const FUTURES_FORUMS = [
-  'ES', 'NQ', 'RTY', 'YM', 'CL', 'BZ', 'NG', 'RB', 'HO', 'GC', 'SI', 'HG', 'PL',
-  'PA', 'ZW', 'ZS', 'ZC', 'ZL', 'ZO', 'ZM', 'ZK', 'ZW', 'ZS', 'ZC', 'ZL', 'KE',
-  'MWE', 'MWZ', 'M6A', 'M6B', 'M6E', 'TN', 'JB', 'UB', 'FV', 'TY', 'US', 'FF',
-  'GE', 'GF', 'ZG', 'ZI', 'ZN', 'ZT', 'ZU', 'ZZ', 'AW', 'BO', 'SM', 'C', 'CT',
-  'DX', 'EC', 'JY', 'BP', 'AD', 'CD', 'SF', 'MP', 'FC', 'LC', 'LB', 'LN', 'KW'
-];
+export const FUTURES_FORUMS = FUTURES_FORUMS_DATA;
 
 export const GENERAL_FORUMS = [
   'GENERAL', 'OPTIONS', 'TECH', 'ECONOMY', 'WORLD', 'MARKETS'
@@ -28,7 +23,7 @@ export function isCryptoForum(category: string): boolean {
 }
 
 export function isFuturesForum(category: string): boolean {
-  return FUTURES_FORUMS.includes(category.toUpperCase()) || category === 'futures';
+  return Object.hasOwn(FUTURES_FORUMS, category.toUpperCase()) || category === 'futures';
 }
 
 export function isAllForum(category: string): boolean {
@@ -43,6 +38,6 @@ export function isGeneralForum(category: string): boolean {
 export const ALL_VALID_FORUMS = [
   ...Object.keys(STOCK_FORUMS),
   ...Object.keys(CRYPTO_FORUMS),
-  ...FUTURES_FORUMS,
+  ...Object.keys(FUTURES_FORUMS),
   ...GENERAL_FORUMS
 ];

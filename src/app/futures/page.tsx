@@ -9,7 +9,7 @@ export default function FuturesPage() {
       description="Follow futures traders and markets in real-time"
       badgeText="All Forums"
       forumType="futures"
-      forumList={FUTURES_FORUMS}
+      forumList={Object.keys(FUTURES_FORUMS)}
       categoryFilter={(category: string) => isFuturesForum(category)}
       getRouterPath={(category: string) => '/futures'}
     />
