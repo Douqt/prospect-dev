@@ -410,22 +410,15 @@ function SearchPageContent() {
     }
   };
 
-  // Handle Enter key in search input
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && searchQuery.trim()) {
-      e.preventDefault();
-      performSearch(searchQuery, activeFilter);
-      // Update URL with search query
-      router.push(`/search?query=${encodeURIComponent(searchQuery)}`);
+  // Handle filter button clicks
+  const handleFilterChange = (filter: SearchFilter) => {
+    setActiveFilter(filter);
+    if (searchQuery.trim()) {
+      performSearch(searchQuery, filter);
     }
   };
 
-  // Handle search button click or programmatic search
-  const handleSearch = (query: string, filter: SearchFilter = 'all') => {
-    performSearch(query, filter);
-    // Update URL with search query
-    router.push(`/search?query=${encodeURIComponent(query)}`);
-  };
+
 
   // Initial search when component mounts
   useEffect(() => {
@@ -466,26 +459,7 @@ function SearchPageContent() {
                 <h1 className="text-2xl font-bold">Search results for "{initialQuery}"</h1>
               </div>
 
-              {/* Search Bar */}
-              <div className="relative max-w-2xl mb-6">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <input
-                  type="text"
-                  placeholder="Search forums, posts, stocks..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  onKeyDown={handleKeyDown}
-                  className="w-full pl-10 pr-10 py-3 px-4 bg-muted border border-border rounded-full text-sm focus:outline-none focus:ring-2 focus:ring-[#e0a815] focus:border-transparent"
-                />
-                {searchQuery && (
-                  <button
-                    onClick={() => setSearchQuery("")}
-                    className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground hover:text-foreground"
-                  >
-                    <X className="h-4 w-4" />
-                  </button>
-                )}
-              </div>
+
 
               {/* Filter Buttons */}
               <div className="flex gap-2 mb-8">
@@ -497,10 +471,7 @@ function SearchPageContent() {
                 ].map((filter) => (
                   <button
                     key={filter.key}
-                    onClick={() => {
-                      setActiveFilter(filter.key as SearchFilter);
-                      handleSearch(searchQuery, filter.key as SearchFilter);
-                    }}
+                    onClick={() => handleFilterChange(filter.key as SearchFilter)}
                     className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${
                       activeFilter === filter.key
                         ? "bg-[#e0a815] text-black"
