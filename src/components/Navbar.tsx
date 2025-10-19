@@ -15,6 +15,7 @@ interface SearchResult {
   title: string;
   subtitle: string;
   url: string;
+  relevance?: number;
 }
 
 export default function NavBar() {
@@ -347,7 +348,8 @@ export default function NavBar() {
         id: item.symbol,
         title: item.title,
         subtitle: item.subtitle,
-        url: item.url
+        url: item.url,
+        relevance: item.relevance
       }));
 
       const matchingCryptoForums = scoredCryptoForums.map(item => ({
@@ -355,7 +357,8 @@ export default function NavBar() {
         id: item.symbol,
         title: item.title,
         subtitle: item.subtitle,
-        url: item.url
+        url: item.url,
+        relevance: item.relevance
       }));
 
       const matchingFuturesForums = scoredFuturesForums.map(item => ({
@@ -363,7 +366,8 @@ export default function NavBar() {
         id: item.forum,
         title: item.title,
         subtitle: item.subtitle,
-        url: item.url
+        url: item.url,
+        relevance: item.relevance
       }));
 
       // Search posts with pagination
@@ -435,11 +439,19 @@ export default function NavBar() {
         id: item.post.id,
         title: item.title,
         subtitle: item.subtitle,
-        url: item.url
+        url: item.url,
+        relevance: item.relevance
       })) || [];
 
       // Combine predefined forums and posts
       const combinedResults = [...predefinedForums, ...scoredPosts];
+
+      // Sort all results by relevance score
+      combinedResults.sort((a, b) => {
+        const aScore = a.relevance || 0;
+        const bScore = b.relevance || 0;
+        return bScore - aScore;
+      });
 
       if (page === 0 || !append) {
         setSearchResults(combinedResults);

@@ -18,6 +18,7 @@ interface SearchResult {
   subtitle: string;
   url: string;
   content?: string;
+  relevance?: number;
   user?: {
     id: string;
     username: string;
@@ -131,7 +132,8 @@ function SearchPageContent() {
             id: item.symbol,
             title: item.title,
             subtitle: item.subtitle,
-            url: item.url
+            url: item.url,
+            relevance: item.relevance
           }));
 
         // Crypto Forums
@@ -159,7 +161,8 @@ function SearchPageContent() {
             id: item.symbol,
             title: item.title,
             subtitle: item.subtitle,
-            url: item.url
+            url: item.url,
+            relevance: item.relevance
           }));
 
         // Futures Forums
@@ -182,7 +185,8 @@ function SearchPageContent() {
             id: item.forum,
             title: item.title,
             subtitle: item.subtitle,
-            url: item.url
+            url: item.url,
+            relevance: item.relevance
           }));
 
         allResults.push(...scoredStockForums, ...scoredCryptoForums, ...scoredFuturesForums);
@@ -261,6 +265,7 @@ function SearchPageContent() {
           title: item.title,
           subtitle: item.subtitle,
           url: item.url,
+          relevance: item.relevance,
           user: item.user
         })) || [];
 
@@ -366,17 +371,17 @@ function SearchPageContent() {
           subtitle: item.subtitle,
           content: item.content,
           url: item.url,
+          relevance: item.relevance,
           user: item.user
         })) || [];
 
         allResults.push(...scoredComments);
       }
 
-      // Sort all results by relevance
+      // Sort all results by relevance score
       allResults.sort((a, b) => {
-        // Extract relevance score from title (format: "SYMBOL - Name" or "Post Title")
-        const aScore = parseInt(a.title.split('•')[0].replace(/[^\d]/g, '')) || 0;
-        const bScore = parseInt(b.title.split('•')[0].replace(/[^\d]/g, '')) || 0;
+        const aScore = a.relevance || 0;
+        const bScore = b.relevance || 0;
         return bScore - aScore;
       });
 
