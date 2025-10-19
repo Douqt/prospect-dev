@@ -22,8 +22,7 @@ import { Dialog, DialogContent, DialogTrigger, DialogTitle, DialogDescription } 
 import { CreatePostForm } from "@/components/discussions/CreatePostForm";
 import { Plus } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
-import { STOCK_FORUMS } from "../../forum-categories";
-import { CRYPTO_FORUMS } from "@/lib/cryptoForums";
+import { STOCK_FORUMS, CRYPTO_FORUMS, FUTURES_FORUMS} from "../../forum-categories";
 
 // Helper function to format numbers with commas
 const formatNumber = (num: string | number) => {
@@ -308,25 +307,37 @@ export function UnifiedForumPage({
     queryFn: async () => {
       if (!resolvedParams?.symbol) return [];
 
-      // Get recent discussions for this forum with profile data
-      const query = supabase
+      // Get recent discussions for this forum
+      const { data, error } = await supabase
         .from("discussions")
-        .select(`
-          id,
-          title,
-          created_at,
-          user_id,
-          profiles!inner(username, display_name)
-        `)
+        .select("id, title, created_at, user_id")
         .eq("category", resolvedParams.symbol.toLowerCase())
         .order("created_at", { ascending: false })
         .limit(5);
 
-      const { data, error } = await query;
-
       if (error) throw error;
 
-      return data || [];
+      if (!data || data.length === 0) return [];
+
+      // Fetch profiles for each activity
+      const activitiesWithProfiles = await Promise.all(
+        data.map(async (activity) => {
+          let profileQuery = supabase
+            .from("profiles")
+            .select("username, display_name");
+
+          profileQuery = addIndexedFilter(profileQuery, 'profiles', { user_id: activity.user_id });
+
+          const { data: profile } = await profileQuery.single();
+
+          return {
+            ...activity,
+            profiles: profile || { username: null, display_name: null }
+          };
+        })
+      );
+
+      return activitiesWithProfiles;
     },
     enabled: !!resolvedParams?.symbol,
     refetchInterval: 2 * 60 * 1000, // Refresh every 2 minutes
@@ -337,6 +348,7 @@ export function UnifiedForumPage({
   // Get data based on forum type
   const stockData = resolvedParams && forumType === 'stocks' ? STOCK_FORUMS[resolvedParams.symbol.toUpperCase()] : null;
   const cryptoData = resolvedParams && forumType === 'crypto' ? CRYPTO_FORUMS[resolvedParams.symbol.toUpperCase()] : null;
+  const futuresData = resolvedParams && forumType === 'futures' ? FUTURES_FORUMS?.[resolvedParams.symbol.toUpperCase()]?.[0] : null;
 
   if (!resolvedParams) {
     return (
@@ -388,10 +400,10 @@ export function UnifiedForumPage({
                   </div>
                   <div className="space-y-1">
                     <h1 className="text-4xl font-bold">
-                      {forumType === 'crypto' && cryptoData ? cryptoData : (stockData ? stockData.Name : displayData.symbol)}
+                      {forumType === 'crypto' && cryptoData ? cryptoData : forumType === 'futures' ? (futuresData ? futuresData['Product Name'] : displayData.symbol) : (stockData ? stockData.Name : displayData.symbol)}
                     </h1>
                     <p className="text-muted-foreground text-lg">
-                      {displayData.symbol} • {forumType === 'crypto' ? 'Cryptocurrency' : (stockData ? stockData.Country : 'Loading...')}
+                      {displayData.symbol} • {forumType === 'crypto' ? 'Cryptocurrency' : (forumType === 'futures' ? (futuresData ? futuresData['Asset Class'] : 'Loading...') : (stockData ? stockData.Country : 'Loading...'))}
                     </p>
                     <p className="text-muted-foreground">{displayData.description}</p>
                   </div>
@@ -465,7 +477,7 @@ export function UnifiedForumPage({
             </div>
 
             {/* Chart and Stats Sidebar - Right Side (Hidden for crypto) */}
-            {forumType !== 'crypto' && (
+            {forumType === 'stocks' && (
               <aside className="w-96 pl-8">
                 <div className="sticky top-6">
                   <div className="space-y-6">
@@ -507,7 +519,6 @@ export function UnifiedForumPage({
                         </div>
                       </CardContent>
                     </Card>
-
                     {/* Recent Activity */}
                     <Card>
                       <CardHeader>
@@ -520,8 +531,99 @@ export function UnifiedForumPage({
                           </div>
                         ) : recentActivity && recentActivity.length > 0 ? (
                           recentActivity.map((activity: any, index) => {
-                            const userDisplayName = activity.profiles?.[0]?.display_name ||
-                              activity.profiles?.[0]?.username ||
+                            const userDisplayName = activity.profiles?.display_name ||
+                              activity.profiles?.username ||
+                              'Anonymous';
+                            const timeAgo = formatDistanceToNow(new Date(activity.created_at), { addSuffix: true });
+
+                            // Determine activity type based on title/content
+                            let activityType = 'New discussion';
+                            let activityColor = 'bg-green-500';
+
+                            if (activity.title.toLowerCase().includes('analysis')) {
+                              activityType = 'New analysis';
+                              activityColor = 'bg-blue-500';
+                            } else if (activity.title.toLowerCase().includes('target')) {
+                              activityType = 'Price target';
+                              activityColor = 'bg-purple-500';
+                            } else if (activity.title.toLowerCase().includes('earnings')) {
+                              activityType = 'Earnings update';
+                              activityColor = 'bg-orange-500';
+                            }
+
+                            return (
+                              <div key={activity.id} className="flex items-start gap-3">
+                                <div className={`w-2 h-2 ${activityColor} rounded-full mt-2`}></div>
+                                <div className="space-y-1 flex-1">
+                                  <div className="text-sm font-medium">
+                                    <span className="text-[#e0a815]">{userDisplayName}</span> posted "{activity.title}"
+                                  </div>
+                                  <div className="text-xs text-muted-foreground">{timeAgo}</div>
+                                </div>
+                              </div>
+                            );
+                          })
+                        ) : (
+                          <div className="text-center text-muted-foreground text-sm py-4">
+                            No recent activity
+                          </div>
+                        )}
+                      </CardContent>
+                    </Card>
+                  </div>
+                </div>
+              </aside>
+            )}
+            {forumType === 'futures' && (
+              <aside className="w-96 pl-8">
+                <div className="sticky top-6">
+                  <div className="space-y-6">
+                    {/* Key Statistics */}
+                    <Card>
+                      <CardHeader>
+                        <CardTitle className="text-lg">Key Statistics</CardTitle>
+                      </CardHeader>
+                      <CardContent className="space-y-3">
+                        <div className="flex justify-between items-center">
+                          <span className="text-sm text-muted-foreground">Volume</span>
+                          <span className="font-medium">
+                            {futuresData ? futuresData['Volume'] : 'Loading...'}
+                          </span>
+                        </div>
+                        <div className="flex justify-between items-center">
+                          <span className="text-sm text-muted-foreground">Open Interest</span>
+                          <span className="font-medium">
+                            {futuresData ? futuresData['Open Interest'] : 'Loading...'}
+                          </span>
+                        </div>
+                        <div className="flex justify-between items-center">
+                          <span className="text-sm text-muted-foreground">Asset Class</span>
+                          <span className="font-medium">
+                            {futuresData ? futuresData['Asset Class'] : 'Loading...'}
+                          </span>
+                        </div>
+                        <div className="flex justify-between items-center">
+                          <span className="text-sm text-muted-foreground">Product Group</span>
+                          <span className="font-medium">
+                            {futuresData ? futuresData['Product Group'] : 'Loading...'}
+                          </span>
+                        </div>
+                      </CardContent>
+                    </Card>
+                    {/* Recent Activity */}
+                    <Card>
+                      <CardHeader>
+                        <CardTitle className="text-lg">Recent Activity</CardTitle>
+                      </CardHeader>
+                      <CardContent className="space-y-3">
+                        {activityLoading ? (
+                          <div className="text-center text-muted-foreground text-sm py-4">
+                            Loading recent activity...
+                          </div>
+                        ) : recentActivity && recentActivity.length > 0 ? (
+                          recentActivity.map((activity: any, index) => {
+                            const userDisplayName = activity.profiles?.display_name ||
+                              activity.profiles?.username ||
                               'Anonymous';
                             const timeAgo = formatDistanceToNow(new Date(activity.created_at), { addSuffix: true });
 

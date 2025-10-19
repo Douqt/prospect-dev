@@ -168,7 +168,7 @@ function SearchPageContent() {
         // Futures Forums
         const scoredFuturesForums = Object.keys(FUTURES_FORUMS)
           .map(forum => {
-            const futuresName = FUTURES_FORUMS[forum];
+            const futuresName = FUTURES_FORUMS?.[forum]?.[0]?.["Product Name"];
             const symbolScore = calculateRelevance(forum, query);
             const nameScore = calculateRelevance(futuresName, query);
             const relevance = Math.max(symbolScore, nameScore);
