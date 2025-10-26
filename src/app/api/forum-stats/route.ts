@@ -1,6 +1,6 @@
 import { createServerClient } from '@/lib/supabase-server';
 import { createClient } from '@supabase/supabase-js';
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { addIndexedFilter, getCommunityStats, updateCommunityStats } from '@/lib/pagination';
 import { CommunityCache } from '@/lib/cache';
 
@@ -17,8 +17,16 @@ export interface ForumStatsResponse {
  * Returns member count and post count for a specific trading symbol
  * Uses cached data when available, falls back to dynamic calculation
  */
-export async function GET(request: Request) {
-  const { searchParams } = new URL(request.url);
+export async function GET(request: NextRequest) {
+  // Safely parse URL with error handling
+  let searchParams;
+  try {
+    const url = new URL(request.url)
+    searchParams = url.searchParams
+  } catch (urlError) {
+    console.error('Failed to parse request URL:', urlError)
+    return NextResponse.json({ error: 'Invalid request URL' }, { status: 400 })
+  }
   const symbol = searchParams.get('symbol');
 
   // Validate required parameters

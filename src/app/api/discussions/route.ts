@@ -1,11 +1,11 @@
 import { createServerClient } from '@/lib/supabase-server';
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 
 /**
  * POST handler for discussions API
  * Handles creating new discussions with authentication
  */
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   try {
     const supabase = await createServerClient();
 
@@ -107,11 +107,19 @@ export async function POST(request: Request) {
  * GET handler for discussions API
  * Fetches discussions by category with profile data and engagement counts
  */
-export async function GET(request: Request) {
+export async function GET(request: NextRequest) {
   try {
     const supabase = await createServerClient();
 
-    const { searchParams } = new URL(request.url);
+    // Safely parse URL with error handling
+    let searchParams;
+    try {
+      const url = new URL(request.url)
+      searchParams = url.searchParams
+    } catch (urlError) {
+      console.error('Failed to parse request URL:', urlError)
+      return NextResponse.json({ error: 'Invalid request URL' }, { status: 400 })
+    }
     const category = searchParams.get('category');
     const limit = Math.min(parseInt(searchParams.get('limit') || '10'), 50); // Max 50
     const offset = Math.max(parseInt(searchParams.get('offset') || '0'), 0);

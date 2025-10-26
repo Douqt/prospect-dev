@@ -1,5 +1,5 @@
 import { createServerClient } from '@/lib/supabase-server';
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { getUserCommunities } from '@/lib/pagination';
 import { CommunityCache } from '@/lib/cache';
 import memoryCache from '@/lib/cache';
@@ -31,7 +31,7 @@ export interface FollowedDiscussionsResponse {
  * Fetches discussions from all user's followed communities
  * Combines posts from multiple communities and sorts by creation date
  */
-export async function GET(request: Request) {
+export async function GET(request: NextRequest) {
   try {
     const supabase = await createServerClient();
 
@@ -41,7 +41,15 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { searchParams } = new URL(request.url);
+    // Safely parse URL with error handling
+    let searchParams;
+    try {
+      const url = new URL(request.url)
+      searchParams = url.searchParams
+    } catch (urlError) {
+      console.error('Failed to parse request URL:', urlError)
+      return NextResponse.json({ error: 'Invalid request URL' }, { status: 400 })
+    }
     const limit = Math.min(parseInt(searchParams.get('limit') || '20'), 50); // Max 50
     const cursor = searchParams.get('cursor');
     const direction = (searchParams.get('direction') || 'next') as 'next' | 'prev';

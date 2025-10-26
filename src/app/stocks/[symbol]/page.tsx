@@ -1,14 +1,14 @@
-"use client";
 import { UnifiedForumPage } from "@/components/UnifiedForumPage";
 
 interface StockPageProps {
   params: Promise<{ symbol: string }>;
 }
 
-export default function StockPage({ params }: StockPageProps) {
+export default async function StockPage({ params }: StockPageProps) {
+  const { symbol } = await params;
   return (
     <UnifiedForumPage
-      params={params}
+      params={{ symbol }}
       forumType="stocks"
       backLink="/stocks"
       getMetadata={(symbol: string) => ({

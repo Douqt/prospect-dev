@@ -6,6 +6,7 @@ import { supabase } from "@/lib/supabaseClient";
 import { buildCursorQuery, addIndexedFilter } from "@/lib/pagination";
 import Sidebar from "@/components/Sidebar";
 import Navbar from "@/components/Navbar";
+import { useIsMobile } from "@/hooks/use-mobile";
 
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -105,6 +106,7 @@ export function UnifiedDashboard({
 }: UnifiedDashboardProps) {
   const router = useRouter();
   const [feedType, setFeedType] = useState<FeedType>('for-you');
+  const isMobile = useIsMobile();
 
   /**
    * Fetches top community statistics with fallback mechanism
@@ -247,8 +249,8 @@ export function UnifiedDashboard({
       />
       <Navbar />
 
-      <main className="relative z-10 pt-24 ml-[300px]">
-        <div className="flex max-w-7xl mx-auto px-6">
+      <main className={`relative z-10 pt-24 ${isMobile ? 'ml-0' : 'ml-[300px]'}`}>
+        <div className={`flex max-w-7xl mx-auto px-6 ${isMobile ? 'flex-col' : ''}`}>
           {/* Main Feed - Centered */}
           <div className="flex-1 max-w-4xl mx-auto">
             {/* Header */}
@@ -439,32 +441,34 @@ export function UnifiedDashboard({
           </div>
 
           {/* Top Communities Sidebar - Right Side */}
-          <div className="w-96 pl-8 border-border">
-            <div className="sticky top-6">
-              <h2 className="text-xl font-semibold mb-4">Top Communities</h2>
-              <div className="space-y-4">
-                {topCommunitiesLoading ? (
-                  topSymbols.map((symbol) => (
-                    <Card key={symbol} className="text-center opacity-50">
-                      <CardContent className="p-4">
-                        <div className="text-lg font-bold text-muted-foreground">{symbol}</div>
-                        <div className="text-xs text-muted-foreground mt-1">Loading members • Loading posts</div>
-                      </CardContent>
-                    </Card>
-                  ))
-                ) : (
-                  topCommunitiesData?.map((community) => (
-                    <Card key={community.symbol} className="text-center">
-                      <CardContent className="p-4">
-                        <div className="text-lg font-bold text-[#e0a815]">{community.symbol.toUpperCase()}</div>
-                        <div className="text-xs text-muted-foreground mt-1">{community.members} members • {community.posts} posts</div>
-                      </CardContent>
-                    </Card>
-                  ))
-                )}
+          {!isMobile && (
+            <div className="w-96 pl-8 border-border">
+              <div className="sticky top-6">
+                <h2 className="text-xl font-semibold mb-4">Top Communities</h2>
+                <div className="space-y-4">
+                  {topCommunitiesLoading ? (
+                    topSymbols.map((symbol) => (
+                      <Card key={symbol} className="text-center opacity-50">
+                        <CardContent className="p-4">
+                          <div className="text-lg font-bold text-muted-foreground">{symbol}</div>
+                          <div className="text-xs text-muted-foreground mt-1">Loading members • Loading posts</div>
+                        </CardContent>
+                      </Card>
+                    ))
+                  ) : (
+                    topCommunitiesData?.map((community) => (
+                      <Card key={community.symbol} className="text-center">
+                        <CardContent className="p-4">
+                          <div className="text-lg font-bold text-[#e0a815]">{community.symbol.toUpperCase()}</div>
+                          <div className="text-xs text-muted-foreground mt-1">{community.members} members • {community.posts} posts</div>
+                        </CardContent>
+                      </Card>
+                    ))
+                  )}
+                </div>
               </div>
             </div>
-          </div>
+          )}
         </div>
       </main>
     </div>

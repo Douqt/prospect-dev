@@ -1,246 +1,29 @@
-"use client";
-import { useEffect, useState } from "react";
-import { supabase } from "@/lib/supabaseClient";
-import { useParams } from "next/navigation";
-import { buildCursorQuery, addIndexedFilter, getNextCursor } from "@/lib/pagination";
-import Sidebar from "@/components/Sidebar";
-import Navbar from "@/components/Navbar";
-import { GridBackground } from "@/components/GridBackground";
-import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { useProfile } from "@/hooks/useProfile";
-import { DiscussionPost } from "@/components/discussions/DiscussionPost";
-import { useQuery } from "@tanstack/react-query";
+import { redirect } from 'next/navigation';
+import { createServerClient } from '@/lib/supabase-server';
 
-export default function ProfilePage() {
-  const params = useParams();
-  const username = params?.username as string | undefined;
+export default async function ProfilePage() {
+  const supabase = await createServerClient();
 
-  const [isCurrentUser, setIsCurrentUser] = useState(false);
-  const [currentUserId, setCurrentUserId] = useState<string>("");
-  const [userData, setUserData] = useState<{
-    id?: string;
-    username?: string;
-    display_name?: string;
-    bio?: string;
-    avatar_url?: string;
-    created_at?: string;
-  } | null>(null);
+  // Get current user
+  const { data: { user }, error: userError } = await supabase.auth.getUser();
 
-  // Get current user's profile
-  const { profile: currentProfile } = useProfile();
-
-  // Check if viewing own profile or someone else's
-  useEffect(() => {
-    const checkAuth = async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      setCurrentUserId(user?.id || "");
-
-      if (username) {
-        // Viewing someone else's profile
-        const { data: profileData } = await supabase
-          .from("profiles")
-          .select("*")
-          .eq("username", username)
-          .single();
-
-        setUserData(profileData);
-        setIsCurrentUser(user?.id === profileData?.id);
-      } else {
-        // No username provided, this is own profile but should be accessed via /[username]
-        setUserData(currentProfile);
-        setIsCurrentUser(true);
-      }
-    };
-
-    checkAuth();
-  }, [username, currentProfile]);
-
-  const displayName = userData?.display_name || userData?.username || "User";
-  const joinDate = userData?.created_at ?
-    new Date(userData.created_at).toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'long'
-    }) : "Unknown";
-
-  // Get user's posts with cursor-based pagination
-  const { data: userPosts, isLoading: postsLoading } = useQuery({
-    queryKey: ["user-posts", userData?.id],
-    queryFn: async () => {
-      if (!userData?.id) return [];
-
-      // Use indexed filter for user posts (author_id equivalent to user_id)
-      let query = supabase
-        .from("discussions")
-        .select("id, title, content, user_id, image_url, category, created_at, upvotes, downvotes, views, comment_count");
-
-      // Apply indexed filter for author_id (using user_id as equivalent)
-      query = addIndexedFilter(query, 'discussions', { author_id: userData.id });
-
-      // Apply cursor-based pagination (default limit 20 for better UX)
-      query = buildCursorQuery(query, { limit: 20 });
-
-      const { data: discussionsData, error } = await query;
-
-      if (error) throw error;
-
-      // Add profile info
-      return discussionsData?.map(post => ({
-        ...post,
-        profiles: {
-          username: userData.username,
-          display_name: userData.display_name,
-          avatar_url: userData.avatar_url
-        },
-        _count: {
-          comments: post.comment_count || 0,
-          votes: {
-            up: post.upvotes || 0,
-            down: post.downvotes || 0
-          }
-        }
-      })) || [];
-    },
-    enabled: !!userData?.id
-  });
-
-  // Get user's comments and comment upvotes with indexed filter
-  const { data: userCommentsData } = useQuery({
-    queryKey: ["user-comments", userData?.id],
-    queryFn: async () => {
-      if (!userData?.id) return { totalComments: 0, totalCommentUpvotes: 0 };
-
-      // Use indexed filter for user comments (author_id equivalent to user_id)
-      let query = supabase
-        .from("comments")
-        .select("id, upvotes, downvotes");
-
-      // Apply indexed filter for author_id (using user_id as equivalent)
-      query = addIndexedFilter(query, 'comments', { author_id: userData.id });
-
-      const { data: commentsData, error: commentsError } = await query;
-
-      if (commentsError) throw commentsError;
-
-      const totalComments = commentsData?.length || 0;
-      const totalCommentUpvotes = commentsData?.reduce((sum, comment) => sum + (comment.upvotes || 0), 0) || 0;
-
-      return { totalComments, totalCommentUpvotes };
-    },
-    enabled: !!userData?.id
-  });
-
-  // Stats
-  const totalPosts = userPosts?.length || 0;
-  const totalPostUpvotes = userPosts?.reduce((sum, post) => sum + (post._count.votes.up || 0), 0) || 0;
-  const totalComments = userCommentsData?.totalComments || 0;
-  const totalCommentUpvotes = userCommentsData?.totalCommentUpvotes || 0;
-
-  if (!userData) {
-    return (
-      <div className="min-h-screen bg-background relative overflow-hidden text-foreground">
-        <Sidebar />
-        <GridBackground />
-        <Navbar />
-        <main className="relative z-10 pt-24 pl-64 pr-6">
-          <div className="h-[calc(100vh-6rem)] flex items-center justify-center">
-            <div className="text-muted-foreground">Loading profile...</div>
-          </div>
-        </main>
-      </div>
-    );
+  if (userError || !user) {
+    // Redirect to login if not authenticated
+    redirect('/login');
   }
 
-  return (
-    <div className="min-h-screen bg-background relative overflow-hidden text-foreground">
-      <Sidebar />
-      <GridBackground />
-      <Navbar />
-      <main className="relative z-10 pt-24 pl-64 pr-6">
-        <div className="max-w-4xl mx-auto py-8 space-y-8">
+  // Get user's profile to get their username
+  const { data: profile, error: profileError } = await supabase
+    .from('profiles')
+    .select('username')
+    .eq('id', user.id)
+    .single();
 
-          {/* Profile Header */}
-          <Card>
-            <CardContent className="pt-6">
-              <div className="flex flex-col md:flex-row gap-6 items-center md:items-start">
-                <Avatar className="w-24 h-24">
-                  <AvatarImage src={userData.avatar_url} />
-                  <AvatarFallback className="text-2xl">
-                    {displayName[0]?.toUpperCase()}
-                  </AvatarFallback>
-                </Avatar>
+  if (profileError || !profile) {
+    // If profile not found, redirect to login or handle error
+    redirect('/login');
+  }
 
-                <div className="flex-1 space-y-3 text-center md:text-left">
-                  <div>
-                    <h1 className="text-3xl font-bold">{displayName}</h1>
-                    <p className="text-muted-foreground">@{userData.username || displayName}</p>
-                    {userData.bio && (
-                      <p className="text-sm text-muted-foreground mt-2 max-w-lg">{userData.bio}</p>
-                    )}
-                  </div>
-
-                  <div className="flex gap-4 items-center justify-center md:justify-start">
-                    <div className="text-center">
-                      <div className="text-2xl font-bold text-primary">{totalPosts}</div>
-                      <div className="text-sm text-muted-foreground">Posts</div>
-                    </div>
-                    <div className="text-center">
-                      <div className="text-2xl font-bold text-green-600">{totalPostUpvotes}</div>
-                      <div className="text-sm text-muted-foreground">Post Upvotes</div>
-                    </div>
-                    <div className="text-center">
-                      <div className="text-2xl font-bold text-blue-600">{totalComments}</div>
-                      <div className="text-sm text-muted-foreground">Comments</div>
-                    </div>
-                    <div className="text-center">
-                      <div className="text-2xl font-bold text-muted-foreground">{joinDate}</div>
-                      <div className="text-sm text-muted-foreground">Joined</div>
-                    </div>
-                  </div>
-
-                  {isCurrentUser && (
-                    <div className="pt-4">
-                      <Button asChild variant="outline">
-                        <a href="/profile/edit-avatar">Edit Profile</a>
-                      </Button>
-                    </div>
-                  )}
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* User's Posts */}
-          <div className="space-y-4">
-            <h2 className="text-2xl font-bold">Recent Posts</h2>
-
-            {postsLoading ? (
-              <div className="text-center py-8 text-muted-foreground">
-                Loading posts...
-              </div>
-            ) : userPosts && userPosts.length > 0 ? (
-              <div className="space-y-4">
-                {userPosts.map((post: { id: string; title: string; content: string; user_id: string; image_url?: string; category: string; created_at: string; profiles: { username?: string; display_name?: string; avatar_url?: string }; _count: { comments: number; votes: { up: number; down: number } } }) => (
-                  <DiscussionPost key={post.id} discussion={post} />
-                ))}
-              </div>
-            ) : (
-              <Card>
-                <CardContent className="py-12">
-                  <div className="text-center text-muted-foreground">
-                    <p className="text-lg mb-2">No posts yet</p>
-                    <p className="text-sm">
-                      {isCurrentUser ? "Create your first post to get started!" : "This user hasn't posted anything yet."}
-                    </p>
-                  </div>
-                </CardContent>
-              </Card>
-            )}
-          </div>
-        </div>
-      </main>
-    </div>
-  );
+  // Redirect to user's profile page
+  redirect(`/profile/${profile.username}`);
 }

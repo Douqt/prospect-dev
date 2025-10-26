@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { buildCursorQuery, addIndexedFilter } from "@/lib/pagination";
 import Sidebar from "@/components/Sidebar";
@@ -17,7 +17,7 @@ import FollowForumButton from "@/components/FollowForumButton";
 import { useRouter } from "next/navigation";
 import { LazyImage } from "@/components/LazyImage";
 import { DiscussionListSkeleton } from "@/components/ui/skeleton-loading";
-import { ErrorBoundary } from "@/components/ErrorBoundary";
+import ErrorBoundary from "@/components/ErrorBoundary";
 import { Dialog, DialogContent, DialogTrigger, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { CreatePostForm } from "@/components/discussions/CreatePostForm";
 import { Plus } from "lucide-react";
@@ -50,7 +50,7 @@ interface ForumData {
 }
 
 interface UnifiedForumPageProps {
-  params: Promise<{ symbol: string }>;
+  params: { symbol: string };
   forumType: 'stocks' | 'crypto' | 'futures';
   backLink: string;
   getMetadata: (symbol: string) => { symbol: string; name: string; description: string };
@@ -211,14 +211,9 @@ export function UnifiedForumPage({
   getRouterPath
 }: UnifiedForumPageProps) {
   const router = useRouter();
-  const [resolvedParams, setResolvedParams] = useState<{ symbol: string } | null>(null);
   const [newPostDialogOpen, setNewPostDialogOpen] = useState(false);
 
-  useEffect(() => {
-    params.then(setResolvedParams);
-  }, [params]);
-
-  const metadata = resolvedParams ? getMetadata(resolvedParams.symbol) : null;
+  const metadata = getMetadata(params.symbol);
 
   const fallbackData: ForumData = {
     symbol: metadata?.symbol || '',
@@ -230,12 +225,10 @@ export function UnifiedForumPage({
 
   // Fetch real-time forum stats
   const { data: forumStats, isLoading: statsLoading } = useQuery({
-    queryKey: ["forum-stats", resolvedParams?.symbol],
+    queryKey: ["forum-stats", params.symbol],
     queryFn: async () => {
-      if (!resolvedParams?.symbol) return null;
-
       try {
-        const response = await fetch(`/api/forum-stats?symbol=${resolvedParams.symbol.toUpperCase()}`);
+        const response = await fetch(`/api/forum-stats?symbol=${params.symbol.toUpperCase()}`);
         const data = await response.json();
         return data;
       } catch (error) {
@@ -249,24 +242,21 @@ export function UnifiedForumPage({
         };
       }
     },
-    enabled: !!resolvedParams?.symbol,
     refetchInterval: 5 * 60 * 1000,
     refetchOnWindowFocus: false,
   });
 
   // Fetch posts for this forum with cursor-based pagination and indexed filters
   const { data: forumDiscussions, isLoading: discussionsLoading } = useQuery({
-    queryKey: ["forum-discussions", resolvedParams?.symbol],
+    queryKey: ["forum-discussions", params.symbol],
     queryFn: async () => {
-      if (!resolvedParams?.symbol) return [];
-
       // Use indexed filter for forum discussions (category equivalent)
       let query = supabase
         .from("discussions")
         .select("id, title, content, category, created_at, upvotes, downvotes, views, comment_count, user_id, image_url");
 
       // Apply indexed filter for category
-      query = addIndexedFilter(query, 'discussions', { category: resolvedParams.symbol.toLowerCase() });
+      query = addIndexedFilter(query, 'discussions', { category: params.symbol.toLowerCase() });
 
       // Apply cursor-based pagination
       query = buildCursorQuery(query, { limit: 20 });
@@ -297,21 +287,18 @@ export function UnifiedForumPage({
       );
 
       return discussionsWithProfiles;
-    },
-    enabled: !!resolvedParams?.symbol
+    }
   });
 
   // Fetch recent activity for this forum
   const { data: recentActivity, isLoading: activityLoading } = useQuery({
-    queryKey: ["recent-activity", resolvedParams?.symbol],
+    queryKey: ["recent-activity", params.symbol],
     queryFn: async () => {
-      if (!resolvedParams?.symbol) return [];
-
       // Get recent discussions for this forum
       const { data, error } = await supabase
         .from("discussions")
         .select("id, title, created_at, user_id")
-        .eq("category", resolvedParams.symbol.toLowerCase())
+        .eq("category", params.symbol.toLowerCase())
         .order("created_at", { ascending: false })
         .limit(5);
 
@@ -339,41 +326,15 @@ export function UnifiedForumPage({
 
       return activitiesWithProfiles;
     },
-    enabled: !!resolvedParams?.symbol,
     refetchInterval: 2 * 60 * 1000, // Refresh every 2 minutes
   });
 
   const displayData = forumStats ? { ...fallbackData, ...forumStats } : fallbackData;
 
   // Get data based on forum type
-  const stockData = resolvedParams && forumType === 'stocks' ? STOCK_FORUMS[resolvedParams.symbol.toUpperCase()] : null;
-  const cryptoData = resolvedParams && forumType === 'crypto' ? CRYPTO_FORUMS[resolvedParams.symbol.toUpperCase()] : null;
-  const futuresData = resolvedParams && forumType === 'futures' ? FUTURES_FORUMS?.[resolvedParams.symbol.toUpperCase()]?.[0] : null;
-
-  if (!resolvedParams) {
-    return (
-      <div className="min-h-screen bg-background relative overflow-hidden text-foreground">
-        <Sidebar />
-      <div
-        className="absolute inset-0 z-0 pointer-events-none"
-        style={{
-          backgroundImage: `linear-gradient(to right, rgba(128, 128, 128, 0.1) 1px, transparent 1px), linear-gradient(to bottom, rgba(128, 128, 128, 0.1) 1px, transparent 1px)`,
-          backgroundSize: "100px 100px",
-        }}
-      />
-        <Navbar />
-        <main className="relative z-10 pt-24 ml-[300px]">
-          <div className="flex max-w-7xl mx-auto px-6">
-            <div className="flex-1 max-w-4xl mx-auto">
-              <div className="h-[calc(100vh-6rem)] flex items-center justify-center">
-                <div className="text-muted-foreground">Loading forum...</div>
-              </div>
-            </div>
-          </div>
-        </main>
-      </div>
-    );
-  }
+  const stockData = forumType === 'stocks' ? STOCK_FORUMS[params.symbol.toUpperCase()] : null;
+  const cryptoData = forumType === 'crypto' ? CRYPTO_FORUMS[params.symbol.toUpperCase()] : null;
+  const futuresData = forumType === 'futures' ? FUTURES_FORUMS?.[params.symbol.toUpperCase()]?.[0] : null;
 
   return (
     <div className="min-h-screen bg-background relative overflow-hidden text-foreground">
@@ -427,7 +388,7 @@ export function UnifiedForumPage({
               </div>
 
               {/* Follow Forum Button */}
-              <FollowForumButton stockSymbol={resolvedParams.symbol.toLowerCase()} />
+              <FollowForumButton stockSymbol={params.symbol.toLowerCase()} />
 
               {/* Discussion Section */}
               <Card>
@@ -456,7 +417,7 @@ export function UnifiedForumPage({
                           Share your thoughts and start a discussion about {displayData.name}.
                         </DialogDescription>
                         <CreatePostForm
-                          category={resolvedParams.symbol.toLowerCase()}
+                          category={params.symbol.toLowerCase()}
                           onClose={() => setNewPostDialogOpen(false)}
                         />
                       </DialogContent>
@@ -465,7 +426,7 @@ export function UnifiedForumPage({
                 </CardHeader>
                 <CardContent className="p-0">
                   <ForumPostList
-                    category={resolvedParams.symbol.toLowerCase()}
+                    category={params.symbol.toLowerCase()}
                     discussions={forumDiscussions || []}
                     isLoading={discussionsLoading}
                     getRouterPath={getRouterPath}

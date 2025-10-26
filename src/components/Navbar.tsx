@@ -5,7 +5,7 @@ import { supabase } from "../lib/supabaseClient";
 import { timeAgo } from "../lib/time";
 import { useTheme } from "@/hooks/useTheme";
 import { Search, X } from "lucide-react";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 import { STOCK_FORUMS, FUTURES_FORUMS, isStockForum, isCryptoForum, isFuturesForum, isGeneralForum } from "../../forum-categories";
 import { CRYPTO_FORUMS } from "@/lib/cryptoForums";
 
@@ -20,7 +20,11 @@ interface SearchResult {
 
 export default function NavBar() {
   const { theme, toggleTheme } = useTheme();
+  const pathname = usePathname();
   const [user, setUser] = useState<{ email?: string; id?: string } | null>(null);
+
+  // Determine if search bar should be shown based on current route
+  const showSearchBar = pathname === '/' || pathname.startsWith('/stocks') || pathname.startsWith('/crypto') || pathname.startsWith('/futures');
   const [isLoading, setIsLoading] = useState(true);
   const [profile, setProfile] = useState<{
     username?: string;
@@ -95,7 +99,7 @@ export default function NavBar() {
           return;
         }
 
-        const r = await fetch(`/api/profile?userId=${user.id}`, {
+        const r = await fetch(`/api/profile?userId=${encodeURIComponent(user.id)}`, {
           headers: { Authorization: `Bearer ${token}` },
         });
 
@@ -147,7 +151,7 @@ export default function NavBar() {
             const token = (await supabase.auth.getSession()).data.session
               ?.access_token;
             if (token) {
-              const r = await fetch(`/api/profile?userId=${user.id}`, {
+              const r = await fetch(`/api/profile?userId=${encodeURIComponent(user.id)}`, {
                 headers: { Authorization: `Bearer ${token}` },
               });
               if (r.ok) {
@@ -221,7 +225,7 @@ export default function NavBar() {
   }, [menuOpen, showSearchResults]);
 
   // Search functionality with pagination support
-  const performSearch = async (query: string, page: number = 0, append: boolean = false) => {
+  const performSearch = useCallback(async (query: string, page: number = 0, append: boolean = false) => {
     if (!query.trim()) {
       setSearchResults([]);
       setSearchPage(0);
@@ -489,7 +493,7 @@ export default function NavBar() {
       setIsSearching(false);
       setIsLoadingMore(false);
     }
-  };
+  }, [searchQuery, searchPage, setSearchResults, setSearchPage, setHasMoreResults, setIsSearching, setIsLoadingMore]);
 
   // Reddit-style posts-only search (when Enter is pressed)
   const performPostsOnlySearch = async (query: string) => {
@@ -739,7 +743,7 @@ export default function NavBar() {
   return (
     <aside className="w-full fixed top-0 left-0 z-50 bg-background border-b border-border">
       <div className="w-full px-8 py-4 flex items-center justify-between">
-        <div className="flex items-center gap-4">
+        <div className={`flex items-center gap-4 ${!showSearchBar ? 'flex-1' : ''}`}>
           <Link href="/">
             <img
               src="/images.png"
@@ -750,7 +754,8 @@ export default function NavBar() {
         </div>
 
         {/* Center Search Bar */}
-        <div className="flex-1 max-w-2xl mx-8 relative search-container">
+        {showSearchBar && (
+          <div className="flex-1 max-w-2xl mx-8 relative search-container">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <input
@@ -894,6 +899,7 @@ export default function NavBar() {
             )}
           </div>
         </div>
+        )}
 
         <nav className="hidden md:flex items-center gap-4">
           {/* Primary top links */}
@@ -1128,8 +1134,55 @@ export default function NavBar() {
           )}
         </nav>
 
-        <button className="md:hidden text-foreground">{/* mobile menu */}</button>
+        <button
+          className="md:hidden p-2 rounded-lg hover:bg-muted transition-colors"
+          onClick={() => setMenuOpen(!menuOpen)}
+          aria-label="Toggle mobile menu"
+        >
+          <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+          </svg>
+        </button>
       </div>
+
+      {/* Mobile Menu */}
+      {menuOpen && (
+        <div className="md:hidden bg-popover border-t border-border">
+          <div className="px-4 py-2 space-y-2">
+            <Link href="/features" className="block py-2 text-foreground hover:text-[#e0a815] transition-colors">
+              Features
+            </Link>
+            <Link href="/about" className="block py-2 text-foreground hover:text-[#e0a815] transition-colors">
+              About
+            </Link>
+            {isLoading ? (
+              <div className="py-2 text-muted-foreground">Loading...</div>
+            ) : !user ? (
+              <a
+                href="/login"
+                className={`block py-2 px-4 rounded font-semibold text-sm transition-colors ${theme === 'dark' ? "text-[#e0a815]" : "text-sky-400"}`}
+              >
+                Login/Signup
+              </a>
+            ) : (
+              <div className="space-y-2">
+                <Link href={`/profile/${profile?.username || user?.email?.split('@')[0] || 'user'}`} className="block py-2 text-foreground hover:text-[#e0a815] transition-colors">
+                  Profile
+                </Link>
+                <Link href="/settings" className="block py-2 text-foreground hover:text-[#e0a815] transition-colors">
+                  Settings
+                </Link>
+                <button
+                  onClick={signOut}
+                  className={`block w-full text-left py-2 text-sm transition-colors ${theme === 'dark' ? "text-red-400" : "text-red-600"}`}
+                >
+                  Sign out
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </aside>
   );
 }

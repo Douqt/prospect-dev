@@ -1,10 +1,10 @@
-"use client";
 import Sidebar from "@/components/Sidebar";
 import Navbar from "@/components/Navbar";
+import MentorDashboardClient from "@/components/mentor-marketplace/MentorDashboardClient";
 
-export default function EditAvatarPage() {
+export default function MentorDashboardPage() {
   return (
-    <div className="min-h-screen bg-black relative overflow-hidden text-white">
+    <div className="min-h-screen bg-background relative overflow-hidden text-foreground">
       <Sidebar />
       <div
         className="absolute inset-0 z-0 pointer-events-none grid-background"
@@ -14,13 +14,13 @@ export default function EditAvatarPage() {
         }}
       />
       <Navbar />
-      <main className="relative z-10 pt-24 pl-64 pr-6">
-        <div className="h-[calc(100vh-6rem)] flex items-center justify-center">
-          <h1 className="text-4xl font-bold">Edit Avatar</h1>
+      <main className="relative z-10 pt-24 ml-[300px]">
+        <div className="flex max-w-7xl mx-auto px-6">
+          <div className="flex-1 max-w-4xl mx-auto">
+            <MentorDashboardClient />
+          </div>
         </div>
       </main>
     </div>
   );
 }
-
-

@@ -1,5 +1,13 @@
+'use client';
+
 import Sidebar from "@/components/Sidebar";
 import Navbar from "@/components/Navbar";
+import dynamic from 'next/dynamic';
+
+const GameBoard = dynamic(() => import('@/components/stock-wars/GameBoard').then(mod => mod.GameBoard), {
+  ssr: false,
+  loading: () => <div>Loading game...</div>
+});
 
 export default function StockWarsPage() {
   return (
@@ -13,9 +21,9 @@ export default function StockWarsPage() {
         }}
       />
       <Navbar />
-      <main className="relative z-10 pt-24 pl-64 pr-6">
-        <div className="h-[calc(100vh-6rem)] flex items-center justify-center">
-          <h1 className="text-4xl font-bold">Stock Wars</h1>
+      <main className="relative z-10">
+        <div className="px-3">
+          <GameBoard />
         </div>
       </main>
     </div>

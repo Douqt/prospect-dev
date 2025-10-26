@@ -1,11 +1,19 @@
 import { createServerClient } from '@/lib/supabase-server'
-import { NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 
-export async function GET(request: Request) {
+export async function GET(request: NextRequest) {
   try {
     const supabase = await createServerClient()
 
-    const { searchParams } = new URL(request.url)
+    // Safely parse URL with error handling
+    let searchParams;
+    try {
+      const url = new URL(request.url)
+      searchParams = url.searchParams
+    } catch (urlError) {
+      console.error('Failed to parse request URL:', urlError)
+      return NextResponse.json({ error: 'Invalid request URL' }, { status: 400 })
+    }
     const userId = searchParams.get('userId')
 
     if (!userId) {

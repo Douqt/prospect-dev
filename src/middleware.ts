@@ -57,6 +57,10 @@ export async function middleware(request: NextRequest) {
   const authRoutes = ['/login', '/signup', '/auth/check', '/auth/confirm']
   const isAuthRoute = authRoutes.some(route => pathname.startsWith(route))
 
+  // Define public routes that should not trigger onboarding checks
+  const publicRoutes = ['/channel', '/videos', '/stocks', '/crypto', '/futures', '/about', '/features']
+  const isPublicRoute = publicRoutes.some(route => pathname.startsWith(route))
+
   // Always bypass checks for onboarding page itself and static assets
   if (pathname === '/auth/onboarding' ||
       pathname.startsWith('/_next/') ||
@@ -65,7 +69,8 @@ export async function middleware(request: NextRequest) {
   }
 
   // Universal onboarding guard: Check if authenticated user has profile row
-  if (user && !isAuthRoute) {
+  // Skip check for public routes that should be accessible without profile
+  if (user && !isAuthRoute && !isPublicRoute) {
     const { data: profile, error } = await supabase
       .from('profiles')
       .select('id') // Efficient: select 1 limit 1 equivalent
@@ -86,21 +91,24 @@ export async function middleware(request: NextRequest) {
       }
 
     // Set theme cookie for zero-flash dark mode if profile exists and has dark_mode
-    const { data: profileWithTheme } = await supabase
-      .from('profiles')
-      .select('dark_mode')
-      .eq('id', user.id)
-      .single()
+    // Only do this for non-public routes to avoid unnecessary database calls
+    if (!isPublicRoute) {
+      const { data: profileWithTheme } = await supabase
+        .from('profiles')
+        .select('dark_mode')
+        .eq('id', user.id)
+        .single()
 
-    if (profileWithTheme?.dark_mode !== undefined) {
-      const themeValue = profileWithTheme.dark_mode ? 'dark' : 'light'
-      response.cookies.set('theme', themeValue, {
-        path     : '/',
-        httpOnly : false,
-        sameSite : 'lax',
-        secure   : process.env.NODE_ENV === 'production',
-        maxAge   : 60 * 60 * 24 * 30,
-      });
+      if (profileWithTheme?.dark_mode !== undefined) {
+        const themeValue = profileWithTheme.dark_mode ? 'dark' : 'light'
+        response.cookies.set('theme', themeValue, {
+          path     : '/',
+          httpOnly : false,
+          sameSite : 'lax',
+          secure   : process.env.NODE_ENV === 'production',
+          maxAge   : 60 * 60 * 24 * 30,
+        });
+      }
     }
   }
 

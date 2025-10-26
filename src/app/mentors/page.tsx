@@ -1,5 +1,6 @@
 import Sidebar from "@/components/Sidebar";
 import Navbar from "@/components/Navbar";
+import MentorMarketplaceClient from "@/components/mentor-marketplace/MentorMarketplaceClient";
 
 export default function MentorsPage() {
   return (
@@ -13,9 +14,11 @@ export default function MentorsPage() {
         }}
       />
       <Navbar />
-      <main className="relative z-10 pt-24 pl-64 pr-6">
-        <div className="h-[calc(100vh-6rem)] flex items-center justify-center">
-          <h1 className="text-4xl font-bold">Mentors</h1>
+      <main className="relative z-10 pt-24 ml-[300px]">
+        <div className="flex max-w-7xl mx-auto px-6">
+          <div className="flex-1 max-w-4xl mx-auto">
+            <MentorMarketplaceClient />
+          </div>
         </div>
       </main>
     </div>

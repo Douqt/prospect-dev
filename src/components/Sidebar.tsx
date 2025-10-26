@@ -2,6 +2,8 @@
 import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 import { supabase } from "../lib/supabaseClient";
+import { motion, AnimatePresence } from "framer-motion";
+import { useIsMobile } from "@/hooks/use-mobile";
 import {
   HomeIcon,
   TrophyIcon,
@@ -13,6 +15,9 @@ import {
   CurrencyDollarIcon,
   BanknotesIcon,
   CubeTransparentIcon,
+  Bars3Icon,
+  ChevronLeftIcon,
+  ChevronRightIcon,
 } from "@heroicons/react/24/outline";
 
 import { GiCrossedSwords, GiGoldBar } from "react-icons/gi";
@@ -23,7 +28,9 @@ export default function Sidebar() {
   const [active, setActive] = useState("Dashboard");
   const [learnOpen, setLearnOpen] = useState(false);
   const [darkMode, setDarkMode] = useState(false);
+  const [isCollapsed, setIsCollapsed] = useState(false);
   const pathname = usePathname();
+  const isMobile = useIsMobile();
 
   useEffect(() => {
     // Initialize dark mode state from document class (set by layout script)
@@ -121,14 +128,54 @@ export default function Sidebar() {
     }
   }, [currentSlug]);
 
+  // Load collapsed state from localStorage, default to collapsed on mobile
+  useEffect(() => {
+    const savedCollapsed = localStorage.getItem("sidebar-collapsed");
+    if (savedCollapsed !== null) {
+      setIsCollapsed(JSON.parse(savedCollapsed));
+    } else {
+      // Default to collapsed on mobile
+      setIsCollapsed(isMobile);
+    }
+  }, [isMobile]);
+
+  // Save collapsed state to localStorage
+  const toggleSidebar = () => {
+    const newCollapsed = !isCollapsed;
+    setIsCollapsed(newCollapsed);
+    localStorage.setItem("sidebar-collapsed", JSON.stringify(newCollapsed));
+  };
+
   return (
-    <aside className="w-64 fixed left-0 top-16 h-screen overflow-y-auto z-50 no-scrollbar bg-background border-r border-border">
+    <motion.aside
+      className={`fixed left-0 top-16 h-screen overflow-y-auto z-50 no-scrollbar bg-background border-r border-border ${isCollapsed ? 'w-16' : 'w-64'}`}
+      initial={false}
+      animate={{ width: isCollapsed ? 64 : 256 }}
+      transition={{ duration: 0.3, ease: "easeInOut" }}
+    >
       <div className="p-3">
+        {/* Toggle Button - Reddit Style */}
+        <div className="flex justify-end relative">
+          <div className={`absolute -right-3 top-2 z-10 ${isCollapsed ? 'right-[-12px]' : 'right-[-12px]'}`}>
+            <button
+              onClick={toggleSidebar}
+              className="w-6 h-6 rounded-full bg-background border border-border shadow-md hover:bg-muted transition-colors flex items-center justify-center"
+              aria-label="Collapse Navigation"
+              title="Collapse Navigation"
+            >
+              {isCollapsed ? (
+                <ChevronRightIcon className="h-3 w-3" />
+              ) : (
+                <ChevronLeftIcon className="h-3 w-3" />
+              )}
+            </button>
+          </div>
+        </div>
         <nav className="space-y-0">
           {links.map((link) => (
             <div key={link.id}>
               {'id' in link && link.id.startsWith('breaker') ? (
-                <hr className="my-2 border-border" />
+                <hr className={`my-2 border-border ${isCollapsed ? 'mx-2' : ''}`} />
               ) : (
                 <>
                   {/* narrow the union so TS knows label/icon exist */}
@@ -161,36 +208,56 @@ export default function Sidebar() {
                             ? "bg-muted border border-border text-primary"
                             : "text-foreground hover:bg-muted"
                       }`}
+                      title={isCollapsed ? link.label : undefined}
                     >
                       {link.icon}
-                      {link.label}
+                      <AnimatePresence>
+                        {!isCollapsed && (
+                          <motion.span
+                            initial={{ opacity: 0, width: 0 }}
+                            animate={{ opacity: 1, width: "auto" }}
+                            exit={{ opacity: 0, width: 0 }}
+                            transition={{ duration: 0.2 }}
+                          >
+                            {link.label}
+                          </motion.span>
+                        )}
+                      </AnimatePresence>
                     </a>
                   )}
 
-                      {"label" in link && link.id === "Learn" && learnOpen && (
-                    <div className="ml-6 mt-2 space-y-2">
-                      {["Mentors", "Videos"].map((id) => (
-                        <a
-                          key={id}
-                          href={`/${toSlug(id)}`}
-                          onClick={() => setActive(id)}
-                          className={`block px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                            derivedLearnChildActive === id
-                              ? "bg-muted border border-border text-primary"
-                              : "text-muted-foreground hover:bg-muted"
-                          }`}
-                        >
-                          {id}
-                        </a>
-                      ))}
-                    </div>
-                  )}
+                  <AnimatePresence>
+                    {"label" in link && link.id === "Learn" && learnOpen && !isCollapsed && (
+                      <motion.div
+                        className="ml-6 mt-2 space-y-2"
+                        initial={{ opacity: 0, height: 0 }}
+                        animate={{ opacity: 1, height: "auto" }}
+                        exit={{ opacity: 0, height: 0 }}
+                        transition={{ duration: 0.2 }}
+                      >
+                        {["Mentors", "Videos"].map((id) => (
+                          <a
+                            key={id}
+                            href={`/${toSlug(id)}`}
+                            onClick={() => setActive(id)}
+                            className={`block px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                              derivedLearnChildActive === id
+                                ? "bg-muted border border-border text-primary"
+                                : "text-muted-foreground hover:bg-muted"
+                            }`}
+                          >
+                            {id}
+                          </a>
+                        ))}
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
                 </>
               )}
             </div>
           ))}
         </nav>
       </div>
-    </aside>
+    </motion.aside>
   );
 }

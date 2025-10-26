@@ -1,6 +1,6 @@
 import { createServerClient } from '@/lib/supabase-server';
 import { createClient } from '@supabase/supabase-js';
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { addIndexedFilter, updateCommunityStats } from '@/lib/pagination';
 import { CommunityCache } from '@/lib/cache';
 
@@ -32,7 +32,7 @@ export interface UpdateCommunityStatsResponse {
  * Recalculates post count from discussions table
  * Maintains community_stats table for performance
  */
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   try {
     const supabase = await createServerClient();
     const body: UpdateCommunityStatsRequest = await request.json();

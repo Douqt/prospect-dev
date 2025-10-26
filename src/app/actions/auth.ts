@@ -2,7 +2,9 @@
 
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
-import { redirect } from 'next/navigation'
+import { Resend } from "resend";
+
+const resend = new Resend(process.env.RESEND_API_KEY!);
 
 export async function signUp(email: string, password: string) {
   const cookieStore = await cookies()
@@ -36,6 +38,13 @@ export async function signUp(email: string, password: string) {
       data: { source: 'onboarding' },
     },
   })
+
+  const confirmation = await resend.emails.send({
+    from: 'Prospect <no-reply@prospect.money>',
+    to: "prospect.moneyhq@gmail.com",
+    subject: 'New User Signup 🎉',
+    html: `<p>A user has just signed up with the email: ${email}</p>`
+  });
 
   if (error) return { ok: false, msg: error.message }
 
